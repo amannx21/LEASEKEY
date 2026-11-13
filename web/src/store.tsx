@@ -6,7 +6,12 @@ import {
 } from "./near";
 
 export type Toast = { id: number; kind: "ok" | "err" | "info"; text: string };
-export type Page = "market" | "mine" | "arena";
+export type Page = "home" | "market" | "mine" | "arena";
+const PAGES: Page[] = ["home", "market", "mine", "arena"];
+const pageFromHash = (): Page => {
+  const h = window.location.hash.slice(1) as Page;
+  return PAGES.includes(h) ? h : "home";
+};
 
 type Chain = {
   items: ItemView[];
@@ -17,6 +22,9 @@ type Chain = {
   toasts: Toast[];
   page: Page;
   arenaItem: string | null;
+  /** Item whose detail panel is open in the armory. */
+  openId: string | null;
+  openItem: (id: string | null) => void;
   setPage: (p: Page) => void;
   playWith: (itemId: string) => void;
   refresh: () => Promise<void>;
@@ -40,7 +48,25 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [page, setPage] = useState<Page>("market");
+  const [page, setPageState] = useState<Page>(pageFromHash);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const setPage = useCallback((p: Page) => {
+    setPageState(p);
+    if (window.location.hash.slice(1) !== p) window.history.pushState(null, "", `#${p}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+  useEffect(() => {
+    const onPop = () => setPageState(pageFromHash());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const openItem = useCallback(
+    (id: string | null) => {
+      setOpenId(id);
+      if (id) setPage("market");
+    },
+    [setPage],
+  );
   const [arenaItem, setArenaItem] = useState<string | null>(null);
   const meRef = useRef(me);
   meRef.current = me;
@@ -173,10 +199,10 @@ export function ChainProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Chain>(
     () => ({
-      items, loading, me, balance, busy, toasts, page, arenaItem, setPage, playWith, refresh, toast,
+      items, loading, me, balance, busy, toasts, page, arenaItem, openId, openItem, setPage, playWith, refresh, toast,
       guestLogin, walletLogin, logout, run, rent, endRental,
     }),
-    [items, loading, me, balance, busy, toasts, page, arenaItem, playWith, refresh, toast, guestLogin,
+    [items, loading, me, balance, busy, toasts, page, arenaItem, openId, openItem, setPage, playWith, refresh, toast, guestLogin,
       walletLogin, logout, run, rent, endRental],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

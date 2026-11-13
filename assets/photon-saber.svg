@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="aura" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#4dffb0" stop-opacity=".45"/><stop offset=".6" stop-color="#00c2a8" stop-opacity=".12"/><stop offset="1" stop-color="#00c2a8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="beam" x1="0" x2="1"><stop offset="0" stop-color="#4dffb0"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#4dffb0"/></linearGradient>
+    <linearGradient id="hilt" x1="0" x2="1"><stop offset="0" stop-color="#3a3f55"/><stop offset=".5" stop-color="#e6e9f5"/><stop offset="1" stop-color="#3a3f55"/></linearGradient>
+    <linearGradient id="dark" x1="0" x2="1"><stop offset="0" stop-color="#0f1120"/><stop offset=".5" stop-color="#3a3f55"/><stop offset="1" stop-color="#0f1120"/></linearGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop offset="0" stop-color="#8a5a12"/><stop offset=".5" stop-color="#ffe59a"/><stop offset="1" stop-color="#8a5a12"/></linearGradient>
+    <filter id="soft" x="-80%" y="-20%" width="260%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="glow" x="-80%" y="-20%" width="260%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+  <circle cx="256" cy="256" r="250" fill="url(#aura)"/>
+  <g fill="none" stroke="#c9ffe9" stroke-opacity=".32">
+    <circle cx="256" cy="256" r="196" stroke-width="1.5"/>
+    <circle cx="256" cy="256" r="182" stroke-width="1" stroke-dasharray="2 10"/>
+  </g>
+  <g transform="rotate(40 256 256)">
+    <rect x="236" y="14" width="40" height="318" rx="20" fill="#4dffb0" filter="url(#soft)" opacity=".85"/>
+    <rect x="244" y="20" width="24" height="312" rx="12" fill="#4dffb0" filter="url(#glow)"/>
+    <rect x="247" y="22" width="18" height="310" rx="9" fill="url(#beam)"/>
+    <rect x="252" y="26" width="8" height="304" rx="4" fill="#ffffff"/>
+    <path d="M228 330 H284 L290 346 H222 Z" fill="url(#gold)" stroke="#fff6cf" stroke-width="2"/>
+    <rect x="236" y="346" width="40" height="112" rx="8" fill="url(#hilt)" stroke="#ffffff" stroke-width="2"/>
+    <g fill="url(#dark)"><rect x="236" y="362" width="40" height="10"/><rect x="236" y="382" width="40" height="10"/><rect x="236" y="402" width="40" height="10"/><rect x="236" y="422" width="40" height="10"/></g>
+    <rect x="270" y="352" width="10" height="26" rx="4" fill="#ff5a4a" stroke="#ffd0c9" stroke-width="1.5"/>
+    <path d="M232 458 H280 L272 480 H240 Z" fill="url(#gold)" stroke="#fff6cf" stroke-width="2"/>
+    <circle cx="256" cy="486" r="7" fill="url(#gold)"/>
+  </g>
+  <g stroke="#b6ffe0" stroke-width="3" stroke-linecap="round" opacity=".85">
+    <path d="M388 92 L408 72 M404 120 L432 110 M362 70 L370 44"/>
+  </g>
+  <g fill="#ffffff">
+    <path d="M110 120 l4 -16 l4 16 l16 4 l-16 4 l-4 16 l-4 -16 l-16 -4z"/>
+    <path d="M400 380 l3 -11 l3 11 l11 3 l-11 3 l-3 11 l-3 -11 l-11 -3z" opacity=".8"/>
+  </g>
+  <g fill="#4dffb0" filter="url(#glow)"><circle cx="90" cy="300" r="4"/><circle cx="430" cy="230" r="4"/><circle cx="330" cy="430" r="3"/></g>
+</svg>

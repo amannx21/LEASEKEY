@@ -2,8 +2,9 @@ import { useState } from "react";
 import { FACTORY_ID, call, fmtNear, parseNear, sessionKeyFor, view, type ItemView, type Settlement } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, StatusBadge, artUrl, statusOf } from "./ui";
+import { ART_KEYS } from "./catalog";
 
-const ART_CHOICES = ["flame-sword", "frost-bow", "thunder-hammer", "shadow-dagger", "guardian-shield", "storm-staff"];
+const ART_CHOICES = ART_KEYS;
 
 export function MyItems() {
   const c = useChain();

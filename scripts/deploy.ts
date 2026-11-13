@@ -16,7 +16,7 @@ import {
 } from "./common.ts";
 
 const MODE = (process.env.MODE ?? "global") as "global" | "embedded";
-const ITEM_COUNT = Number(process.env.ITEMS ?? 5);
+const ITEM_COUNT = Number(process.env.ITEMS ?? 12);
 const GAS = 300n * TGAS;
 
 const DEMO_ITEMS = [
@@ -25,7 +25,13 @@ const DEMO_ITEMS = [
   { name: "Thunder Hammer", image: "thunder-hammer.svg", power: 60, price: "0.2", royalty_bps: 1500 },
   { name: "Shadow Dagger", image: "shadow-dagger.svg", power: 18, price: "0.04", royalty_bps: 500 },
   { name: "Guardian Shield", image: "guardian-shield.svg", power: 12, price: "0.03", royalty_bps: 1000 },
-  { name: "Storm Staff", image: "storm-staff.svg", power: 50, price: "0.15", royalty_bps: 1000 },
+  { name: "Plasma Blaster", image: "plasma-blaster.svg", power: 22, price: "0.12", royalty_bps: 1000 },
+  { name: "Storm Staff", image: "storm-staff.svg", power: 34, price: "0.15", royalty_bps: 1000 },
+  { name: "Aegis Plate", image: "aegis-plate.svg", power: 55, price: "0.08", royalty_bps: 1000 },
+  { name: "Seraph Helm", image: "seraph-helm.svg", power: 30, price: "0.05", royalty_bps: 1000 },
+  { name: "Astral Gauntlet", image: "astral-gauntlet.svg", power: 70, price: "0.3", royalty_bps: 1500 },
+  { name: "Photon Saber", image: "photon-saber.svg", power: 45, price: "0.14", royalty_bps: 1000 },
+  { name: "Tide Trident", image: "tide-trident.svg", power: 38, price: "0.11", royalty_bps: 1000 },
 ];
 
 async function balance(id: string): Promise<bigint> {

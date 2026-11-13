@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="aura" cx="50%" cy="45%" r="52%"><stop offset="0" stop-color="#2fb6ff" stop-opacity=".5"/><stop offset=".6" stop-color="#0a4fbf" stop-opacity=".14"/><stop offset="1" stop-color="#0a4fbf" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a5a12"/><stop offset=".5" stop-color="#fff0b8"/><stop offset="1" stop-color="#8a5a12"/></linearGradient>
+    <linearGradient id="prong" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#ffe08a"/><stop offset="1" stop-color="#c88a1c"/></linearGradient>
+    <linearGradient id="haft" x1="0" x2="1"><stop offset="0" stop-color="#0c2c52"/><stop offset=".5" stop-color="#3f8fd6"/><stop offset="1" stop-color="#0c2c52"/></linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter>
+  </defs>
+  <circle cx="256" cy="256" r="250" fill="url(#aura)"/>
+  <g fill="none" stroke="#bfe6ff" stroke-opacity=".35">
+    <circle cx="256" cy="256" r="196" stroke-width="1.5"/>
+    <circle cx="256" cy="256" r="182" stroke-width="1" stroke-dasharray="2 10"/>
+  </g>
+  <g fill="none" stroke="#6fd0ff" stroke-width="5" stroke-linecap="round" opacity=".7">
+    <path d="M70 350 C110 320 140 380 180 350 C205 332 220 340 232 352"/>
+    <path d="M442 330 C402 300 372 360 332 330 C312 316 296 322 284 334"/>
+    <path d="M96 400 C126 382 150 412 176 398" opacity=".7"/><path d="M416 392 C386 374 362 404 336 390" opacity=".7"/>
+  </g>
+  <g transform="rotate(20 256 256)">
+    <rect x="246" y="190" width="20" height="296" rx="8" fill="url(#haft)" stroke="#8fc8ff" stroke-width="2"/>
+    <g fill="url(#gold)"><rect x="240" y="268" width="32" height="12" rx="4"/><rect x="240" y="350" width="32" height="12" rx="4"/><rect x="240" y="432" width="32" height="12" rx="4"/></g>
+    <path d="M256 478 L268 494 L256 508 L244 494 Z" fill="url(#gold)"/>
+    <path d="M176 60 V150 C176 190 210 204 256 204 C302 204 336 190 336 150 V60" fill="none" stroke="#2fb6ff" stroke-width="30" filter="url(#soft)" opacity=".6"/>
+    <path d="M256 14 L280 76 L266 76 V196 H246 V76 L232 76 Z" fill="url(#prong)" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M176 48 L196 104 L186 104 V148 C186 172 208 182 246 184 V204 C196 202 166 184 166 148 V104 L156 104 Z" fill="url(#prong)" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M336 48 L316 104 L326 104 V148 C326 172 304 182 266 184 V204 C316 202 346 184 346 148 V104 L356 104 Z" fill="url(#prong)" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M222 196 H290 L298 216 H214 Z" fill="url(#gold)" stroke="#fff0b8" stroke-width="2"/>
+    <circle cx="256" cy="206" r="10" fill="#2fb6ff" stroke="#e6f6ff" stroke-width="2"/>
+    <circle cx="256" cy="206" r="16" fill="#2fb6ff" filter="url(#glow)" opacity=".6"/>
+  </g>
+  <g fill="#ffffff">
+    <path d="M110 110 l4 -16 l4 16 l16 4 l-16 4 l-4 16 l-4 -16 l-16 -4z"/>
+    <path d="M420 200 l3 -11 l3 11 l11 3 l-11 3 l-3 11 l-3 -11 l-11 -3z" opacity=".8"/>
+  </g>
+  <g fill="#bfe6ff" opacity=".85"><circle cx="150" cy="300" r="5"/><circle cx="372" cy="286" r="4"/><circle cx="120" cy="250" r="3"/><circle cx="400" cy="420" r="4"/></g>
+</svg>

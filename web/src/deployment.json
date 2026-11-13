@@ -9,7 +9,14 @@
     "frost-bow-2.leasekey-lq3d9s.testnet",
     "thunder-hammer-3.leasekey-lq3d9s.testnet",
     "shadow-dagger-4.leasekey-lq3d9s.testnet",
-    "guardian-shield-5.leasekey-lq3d9s.testnet"
+    "guardian-shield-5.leasekey-lq3d9s.testnet",
+    "plasma-blaster-6.leasekey-lq3d9s.testnet",
+    "storm-staff-7.leasekey-lq3d9s.testnet",
+    "aegis-plate-8.leasekey-lq3d9s.testnet",
+    "seraph-helm-9.leasekey-lq3d9s.testnet",
+    "astral-gauntlet-10.leasekey-lq3d9s.testnet",
+    "photon-saber-11.leasekey-lq3d9s.testnet",
+    "tide-trident-12.leasekey-lq3d9s.testnet"
   ],
   "deployedAt": "2026-11-13T06:53:26.354Z",
   "guestBank": {
