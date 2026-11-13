@@ -106,7 +106,7 @@ npm --prefix web install
 npm run dev
 ```
 
-Open http://localhost:5173. The landing page explains the idea. Click **Play as guest**, open the **Armory**, rent any of the 12 weapons and armour pieces for 2 minutes, and fight in the **Arena**. Each item has its own attack style, and practice mode lets you try any item without renting it. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
+Open http://localhost:5173. The landing page explains the idea. Click **Play as guest**, open the **Armory**, rent any of the 12 weapons and armour pieces for 2 minutes, and fight in the **Arena**. Each item has its own attack style. On **My Items** you can also claim an item from the demo game "Ember Realms" and wrap it to rent it out. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
 
 ### 3. Verify the live deployment from the command line (about 90 seconds)
 
