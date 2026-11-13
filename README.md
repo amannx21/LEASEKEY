@@ -103,7 +103,7 @@ npm --prefix web install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Play as guest**, rent the Flame Sword for 2 minutes, and play. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
+Open http://localhost:5173. The landing page explains the idea. Click **Play as guest**, open the **Armory**, rent any of the 12 weapons and armour pieces for 2 minutes, and fight in the **Arena**. Each item has its own attack style, and practice mode lets you try any item without renting it. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
 
 ### 3. Verify the live deployment from the command line (about 90 seconds)
 
@@ -126,7 +126,7 @@ The first `cargo test` in `tests/` downloads the NEAR sandbox binary and takes a
 ### 5. Deploy your own copy to testnet (optional)
 
 ```bash
-bash scripts/deploy.sh                 # global-contract mode, 5 demo items
+bash scripts/deploy.sh                 # global-contract mode, 12 demo items
 MODE=embedded bash scripts/deploy.sh   # fallback: copy the wasm into every item account
 ```
 
@@ -162,6 +162,8 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 | Durability and repair (P1) | test `durability_wears_down_and_owner_repairs` |
 | Extend a running lease (P1) | test `extend_adds_time_and_rent`, "+2 min" in the game |
 | Gameplay with no wallet pop-ups | demo step 4: the on-chain feed shows one transaction per strike |
+| 12 items with eight distinct attack styles | Armory page; the practice rack in the Arena |
+| Live economy charts read from chain | landing page, "The economy, live from testnet" |
 
 ## Architecture
 
@@ -170,7 +172,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 | `contracts/item` | Item contract on every item account: rental state, `use_item`, `end_rental`, early return, extend, durability, earnings and split |
 | `contracts/leasekey` | Factory and NEP-171 NFT contract: mint, transfer, enumeration, listing index, item code management |
 | `tests/` | near-workspaces sandbox tests for every P0 rule |
-| `web/` | Vite, React, TypeScript: Marketplace, My Items, Slime Arena |
+| `web/` | Vite, React, TypeScript: landing page, Armory, Arena, My Items |
 | `scripts/` | `build.sh`, `deploy.sh`, `deploy.ts`, `keeper.ts`, `e2e.ts` |
 | `res/` | Built wasm files |
 | `assets/` | Original CC0 item art |
@@ -226,4 +228,4 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 
 ## License
 
-MIT. Item art is original and CC0.
+MIT. Item art is original and CC0. Item designs are original pieces inspired by well-known archetypes, not copies of any franchise's assets. Fonts are Cinzel and Manrope, both under the SIL Open Font License.

@@ -22,9 +22,9 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
 - [x] Revenue split: owner plus creator royalty, set at mint
 - [x] Item ledger view `get_item`
 - [x] near-workspaces tests for every P0 rule (12 passing)
-- [x] Testnet deploy and seed script, 5 demo items live
+- [x] Testnet deploy and seed script, 12 demo items live, including armour
 - [x] Keeper script
-- [x] Frontend: Marketplace, My Items, Slime Arena mini game
+- [x] Frontend: landing page with axe-throw hero and live charts, Armory with class filters and detail panel, Arena with eight attack styles and practice mode, My Items
 - [x] End-to-end check against live testnet (`npm run e2e`)
 - [x] README, DEMO.md, LICENSE, .env.example
 
