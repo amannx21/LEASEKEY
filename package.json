@@ -1,0 +1,23 @@
+{
+  "name": "leasekey",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Game items that rent themselves out on NEAR",
+  "license": "MIT",
+  "scripts": {
+    "build:contracts": "bash scripts/build.sh",
+    "test:contracts": "cd tests && cargo test",
+    "deploy": "tsx scripts/deploy.ts",
+    "keeper": "tsx scripts/keeper.ts",
+    "e2e": "tsx scripts/e2e.ts",
+    "dev": "npm --prefix web run dev",
+    "build:web": "npm --prefix web run build"
+  },
+  "devDependencies": {
+    "near-api-js": "6.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0"
+  }
+}
