@@ -10,6 +10,7 @@
     "test:contracts": "cd tests && cargo test",
     "deploy": "tsx scripts/deploy.ts",
     "keeper": "tsx scripts/keeper.ts",
+    "bank": "tsx scripts/bank.ts",
     "e2e": "tsx scripts/e2e.ts",
     "dev": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build"

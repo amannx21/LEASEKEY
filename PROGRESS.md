@@ -7,7 +7,7 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
 - **Mode shipped:** per-item sub-accounts with a NEAR global contract referenced by code hash. Verified in the sandbox and on testnet. The single-contract fallback was not needed.
 - **Gas model:** the session key signs as the item account, so the item pays gas. The renter prepays a gas budget, charged 0.0005 NEAR per use, with the rest refunded at settlement.
 - **Transfers during a rental:** allowed, the lease carries over intact and rent goes to the owner at settlement.
-- **Guest mode:** the frontend can create a faucet-funded testnet account in one click, so the demo needs no wallet.
+- **Guest mode:** the frontend creates a throwaway testnet account in one click, so the demo needs no wallet. It uses the public faucet, and falls back to a small public guest bank account when the faucet is rate limited.
 - **Build environment:** contracts build and test on Linux, macOS or WSL. The sandbox does not run on native Windows.
 
 ## P0
@@ -50,4 +50,4 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
 
 ## Biggest remaining risk
 
-Public testnet RPC rate limits during the live demo or the judges' run. The scripts back off and retry, and the frontend fails over between two endpoints, but a private RPC URL in `VITE_RPC_URL` removes the risk.
+Public testnet rate limits during the live demo or the judges' run, on both the RPC and the faucet. The faucet blocked this machine for 8 hours after about ten accounts, which is why the guest bank exists. The scripts back off and retry, and the frontend fails over between two endpoints, but a private RPC URL in `VITE_RPC_URL` removes the risk.

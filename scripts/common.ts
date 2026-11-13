@@ -24,6 +24,8 @@ export type Deployment = {
   itemCodeHash?: string;
   items: string[];
   deployedAt: string;
+  /** Throwaway TESTNET account, deliberately public: funds guest accounts when the faucet is rate limited. */
+  guestBank?: { accountId: string; secretKey: string };
 };
 
 export function near(amount: string | number): bigint {
@@ -71,6 +73,7 @@ export function accountFor(accountId: string, secretKey?: string): Account {
 /** Creates a throwaway testnet account funded by the public testnet faucet. */
 export async function createFaucetAccount(accountId: string): Promise<Account> {
   if (loadKey(accountId)) return accountFor(accountId); // already created on an earlier run
+  if (process.env.LK_NO_FAUCET) throw new Error("faucet disabled by LK_NO_FAUCET");
   const keyPair = KeyPair.fromRandom("ed25519");
   const res = await fetch(FAUCET_URL, {
     method: "POST",
@@ -106,4 +109,42 @@ export function readDeployment(): Deployment | undefined {
 
 export async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
   return retry(`view ${method}`, async () => (await provider.callFunction(contractId, method, args)) as T);
+}
+
+/**
+ * A funded throwaway account for tests and the keeper. Tries the public
+ * faucet first; if it is rate limited, the deployment's guest bank creates a
+ * sub-account instead.
+ */
+export async function createTestAccount(prefix: string, fundNear = "0.4"): Promise<Account> {
+  const name = `${prefix}-${randomSuffix()}`;
+  try {
+    return await createFaucetAccount(`${name}.testnet`);
+  } catch (e) {
+    const bank = readDeployment()?.guestBank;
+    if (!bank) throw e;
+    console.log(`faucet unavailable, using guest bank ${bank.accountId}`);
+    const keyPair = KeyPair.fromRandom("ed25519");
+    const id = `${name}.${bank.accountId}`;
+    await retry("bank", () =>
+      accountFor(bank.accountId, bank.secretKey).createSubAccount(name, keyPair.getPublicKey(), near(fundNear)));
+    saveKey(id, keyPair.toString());
+    return accountFor(id, keyPair.toString());
+  }
+}
+
+/** Creates (or tops up) bank.<factory>, the public guest bank, and records it in deployment.json. */
+export async function setupGuestBank(factoryId: string, amount: bigint): Promise<void> {
+  const d = readDeployment();
+  if (!d || d.factoryId !== factoryId) throw new Error("deployment.json does not match the factory");
+  const factory = accountFor(factoryId);
+  const bankId = `bank.${factoryId}`;
+  if (d.guestBank) {
+    await retry("top up bank", () => factory.transfer({ receiverId: bankId, amount }));
+    return;
+  }
+  const keyPair = KeyPair.fromRandom("ed25519");
+  await retry("create bank", () => factory.createSubAccount("bank", keyPair.getPublicKey(), amount));
+  d.guestBank = { accountId: bankId, secretKey: keyPair.toString() };
+  writeFileSync(DEPLOYMENT_FILE, JSON.stringify(d, null, 2) + "\n");
 }

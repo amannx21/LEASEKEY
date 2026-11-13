@@ -171,14 +171,22 @@ export function loadGuest(): Identity | null {
 
 /** One click: a throwaway testnet account funded by the public faucet. No wallet, no seed phrase. */
 export async function createGuest(): Promise<Identity> {
-  const accountId = `lk-guest-${Math.random().toString(36).slice(2, 8)}.testnet`;
+  const name = `lk-guest-${Math.random().toString(36).slice(2, 8)}`;
+  let accountId = `${name}.testnet`;
   const keyPair = KeyPair.fromRandom("ed25519");
   const res = await fetch(FAUCET_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ newAccountId: accountId, newAccountPublicKey: keyPair.getPublicKey().toString() }),
-  });
-  if (!res.ok) throw new Error(`testnet faucet refused: ${res.status} ${(await res.text()).slice(0, 120)}`);
+  }).catch(() => null);
+  if (!res?.ok) {
+    // Faucet is rate limited: the deployment's public guest bank funds the account instead.
+    const bank = (deployment as any).guestBank as { accountId: string; secretKey: string } | undefined;
+    if (!bank) throw new Error(`testnet faucet refused: ${res?.status ?? "network error"}`);
+    accountId = `${name}.${bank.accountId}`;
+    const banker = new Account(bank.accountId, provider, KeyPairSigner.fromSecretKey(bank.secretKey as any));
+    await banker.createSubAccount(name, keyPair.getPublicKey(), NEAR / 2n);
+  }
   for (let i = 0; i < 20; i++) {
     try {
       await provider.viewAccount(accountId);

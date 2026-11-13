@@ -103,7 +103,7 @@ npm --prefix web install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Play as guest**, rent the Flame Sword for 2 minutes, and play. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet.
+Open http://localhost:5173, click **Play as guest**, rent the Flame Sword for 2 minutes, and play. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
 
 ### 3. Verify the live deployment from the command line (about 90 seconds)
 
@@ -111,7 +111,7 @@ Open http://localhost:5173, click **Play as guest**, rent the Flame Sword for 2 
 npm run e2e
 ```
 
-This rents an item for 60 seconds with a fresh faucet account, strikes three times with the session key, proves the key cannot do anything else, waits for expiry, and settles. It prints `PASS` per check and ends with `E2E OK`.
+This rents an item for 60 seconds with a fresh throwaway account, strikes three times with the session key, proves the key cannot do anything else, waits for expiry, and settles. It prints `PASS` per check and ends with `E2E OK`.
 
 ### 4. Build and test the contracts
 
@@ -203,7 +203,8 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 - After expiry the key stays on the account until someone calls `end_rental`. The contract rejects it in the meantime. The keeper and the game client both call `end_rental`.
 - The session key is stored in the browser's `localStorage`. It can only play, so a leak costs at most the remaining gas budget.
 - The shortest rental is 60 seconds, the longest is set per item, 2 hours for the demo items.
-- Guest mode depends on the public testnet faucet, and public testnet RPC endpoints are rate limited. Set `VITE_RPC_URL` or `NEAR_RPC_URL` to use your own.
+- Guest mode uses the public testnet faucet, which is rate limited per address. As a fallback, `web/src/deployment.json` contains the key of a small testnet-only guest bank account that creates guest accounts. That key is public on purpose, holds only a few testnet NEAR, and anyone could drain it. `npm run bank -- 5` refills it from the factory.
+- Public testnet RPC endpoints are rate limited. Set `VITE_RPC_URL` or `NEAR_RPC_URL` to use your own.
 - The wallet path uses NEAR Wallet Selector with MyNearWallet and Meteor. The automated checks and our manual run-through exercised the guest path; the wallet path is implemented but less tested.
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
 - Not audited. Testnet only.

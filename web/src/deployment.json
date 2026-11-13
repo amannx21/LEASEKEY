@@ -11,5 +11,9 @@
     "shadow-dagger-4.leasekey-lq3d9s.testnet",
     "guardian-shield-5.leasekey-lq3d9s.testnet"
   ],
-  "deployedAt": "2026-11-13T06:53:26.354Z"
+  "deployedAt": "2026-11-13T06:53:26.354Z",
+  "guestBank": {
+    "accountId": "bank.leasekey-lq3d9s.testnet",
+    "secretKey": "ed25519:G7fWEPVgRPs63AGRSgkpYFNFJUdSorUYHhoWgkbwvzK9fJhsD48uGxfDZHYS91nHk1J3Du9mMJK7rNa5wrFpY7J"
+  }
 }

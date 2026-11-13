@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { KeyPair } from "near-api-js";
 import {
   DEPLOYMENT_FILE, KEYS_DIR, ROOT, TGAS, accountFor, createFaucetAccount, fmt, near, provider,
-  randomSuffix, retry, saveKey, view, type Deployment,
+  randomSuffix, retry, saveKey, setupGuestBank, view, type Deployment,
 } from "./common.ts";
 
 const MODE = (process.env.MODE ?? "global") as "global" | "embedded";
@@ -118,6 +118,10 @@ async function main() {
     deployedAt: new Date().toISOString(),
   };
   writeFileSync(DEPLOYMENT_FILE, JSON.stringify(deployment, null, 2) + "\n");
+
+  // Spare funds go to a public guest bank, the fallback when the faucet rate-limits visitors.
+  const spare = (await balance(factoryId)) - factoryStorage - near(2);
+  if (spare > near(1)) await setupGuestBank(factoryId, spare);
 
   console.log(`\nDeployed. Factory balance left: ${fmt(await balance(factoryId))} NEAR`);
   console.log(`  factory / NFT contract : ${factoryId}`);

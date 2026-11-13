@@ -10,7 +10,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Account } from "near-api-js";
 import {
-  ROOT, accountFor, createFaucetAccount, fmt, randomSuffix, readDeployment, sleep, view,
+  ROOT, accountFor, createTestAccount, fmt, readDeployment, sleep, view,
 } from "./common.ts";
 
 type ItemRef = { token_id: string; item_account: string; owner: string };
@@ -22,10 +22,8 @@ async function keeperAccount(): Promise<Account> {
   }
   const marker = join(ROOT, ".leasekey", "keeper.txt");
   if (existsSync(marker)) return accountFor(readFileSync(marker, "utf8").trim());
-  const id = `lk-keeper-${randomSuffix()}.testnet`;
-  console.log(`creating keeper account ${id} from the testnet faucet`);
-  const account = await createFaucetAccount(id);
-  writeFileSync(marker, id);
+  const account = await createTestAccount("lk-keeper");
+  writeFileSync(marker, account.accountId);
   return account;
 }
 

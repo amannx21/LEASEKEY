@@ -4,7 +4,7 @@
 // key, proves the key cannot do anything else, then settles after expiry.
 import { Account, KeyPair, KeyPairSigner } from "near-api-js";
 import {
-  accountFor, createFaucetAccount, fmt, near, provider, randomSuffix, readDeployment, sleep, view,
+  accountFor, createTestAccount, fmt, near, provider, readDeployment, sleep, view,
 } from "./common.ts";
 
 type ItemView = {
@@ -41,8 +41,8 @@ async function main() {
   const before = await view<ItemView>(itemId, "get_item");
   console.log(`item: ${before.name} (${itemId}) at ${fmt(before.price_per_hour)} NEAR/hr`);
 
-  const renter = await createFaucetAccount(`lk-renter-${randomSuffix()}.testnet`);
-  console.log(`renter: ${renter.accountId} (fresh faucet account)`);
+  const renter = await createTestAccount("lk-renter");
+  console.log(`renter: ${renter.accountId} (fresh throwaway account)`);
 
   // Rent for 60 seconds with a session key generated right here.
   const sessionKey = KeyPair.fromRandom("ed25519");

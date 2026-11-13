@@ -86,7 +86,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
     try {
       const guest = await createGuest();
       setMe(guest);
-      toast("ok", `You are ${guest.accountId}, funded by the testnet faucet.`);
+      toast("ok", `You are ${guest.accountId}, a free throwaway testnet account.`);
     } catch (e) {
       toast("err", errorText(e));
     } finally {
