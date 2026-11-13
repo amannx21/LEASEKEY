@@ -417,3 +417,5 @@ canvas { display: block; width: 100%; aspect-ratio: 1280 / 560; cursor: crosshai
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
 }
+.rent-chip span { display: grid; text-align: left; line-height: 1.2; font-size: 14px; }
+.rent-chip small { color: var(--muted); font-weight: 500; font-size: 12px; }

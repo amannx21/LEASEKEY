@@ -31,17 +31,15 @@ export function Arena() {
   const me = c.me?.accountId;
   const leases = c.items.filter((i) => i.renter === me && !!sessionKeyFor(i) && i.rental_active);
   const [chosen, setChosen] = useState<string | null>(c.arenaItem);
-  const [practice, setPractice] = useState<string | null>(null);
+  const rentable = c.items
+    .filter((i) => i.listed && !i.renter && i.durability > 0 && i.owner !== me)
+    .sort((a, b) => b.power - a.power);
 
   useEffect(() => {
-    if (c.arenaItem) {
-      setChosen(c.arenaItem);
-      setPractice(null);
-    }
+    if (c.arenaItem) setChosen(c.arenaItem);
   }, [c.arenaItem]);
 
-  const item =
-    (practice ? null : leases.find((i) => i.account_id === chosen) ?? leases[0]) ?? null;
+  const item = leases.find((i) => i.account_id === chosen) ?? leases[0] ?? null;
   const keyPair = item ? sessionKeyFor(item) : null;
   const publicKey = keyPair?.getPublicKey().toString() ?? null;
   const session = useMemo(
@@ -67,11 +65,9 @@ export function Arena() {
   }, [session]);
 
   const armedOnChain = !!session && timeLeft > 0 && usesLeft > 0 && item!.durability > 0;
-  const equip: Equip | null = practice
-    ? { look: LOOKS[practice], power: 30, onChain: false }
-    : armedOnChain
-      ? { look: lookOf(item!.image), power: item!.power, onChain: true }
-      : null;
+  const equip: Equip | null = armedOnChain
+    ? { look: lookOf(item!.image), power: item!.power, onChain: true }
+    : null;
 
   const pushFeed = useCallback((entry: Omit<Feed, "id">) => {
     const id = Date.now() + Math.random();
@@ -153,9 +149,8 @@ export function Arena() {
           <div className={`weapon ${equip ? "live" : "dead"}`}>
             {look ? <img src={`/items/${look.key}.svg`} alt="" /> : <span className="fist"><Icon name="shield" size={26} /></span>}
             <div>
-              <b>{practice ? LOOKS[practice] && `${nameOf(practice)}` : item ? item.name : "Bare hands"}</b>
+              <b>{item ? item.name : "Bare hands"}</b>
               {equip?.onChain && <span className="pill">leased</span>}
-              {practice && <span className="pill dim">practice</span>}
               <small>
                 {equip ? STYLE_INFO[equip.look.style] : `${FIST_DAMAGE} damage. Rent gear to hit far harder.`}
               </small>
@@ -167,9 +162,11 @@ export function Arena() {
                   {" · "}<span className="num">{usesLeft}</span> strikes left · power {item.power}
                 </small>
               )}
-              {practice && <small>Practice mode sends no transactions. Rent it to fight on chain.</small>}
             </div>
-            {session && item && timeLeft > 0 && !practice && (
+            {!session && (
+              <button className="primary" onClick={() => c.setPage("market")}>Rent a weapon</button>
+            )}
+            {session && item && timeLeft > 0 && (
               <button
                 disabled={!!c.busy}
                 title="Add 2 minutes to this lease with the same session key"
@@ -211,23 +208,29 @@ export function Arena() {
           )}
         </div>
 
-        <div className="rack">
-          <span className="rack-label">Your gear</span>
-          {leases.map((i) => (
-            <button key={i.account_id} className={!practice && item?.account_id === i.account_id ? "on" : ""}
-              onClick={() => { setPractice(null); setChosen(i.account_id); }} title={`${i.name}, leased`}>
-              <img src={artUrl(i.image)} alt="" /><span>{i.name}</span>
-            </button>
-          ))}
-          {leases.length === 0 && <span className="muted">No active leases.</span>}
-          <span className="rack-label">Practice</span>
-          {Object.values(LOOKS).map((l) => (
-            <button key={l.key} className={`ghosty ${practice === l.key ? "on" : ""}`}
-              onClick={() => setPractice(practice === l.key ? null : l.key)} title={`Practice with ${nameOf(l.key)}`}>
-              <img src={`/items/${l.key}.svg`} alt="" />
-            </button>
-          ))}
-        </div>
+        {leases.length > 1 && (
+          <div className="rack">
+            <span className="rack-label">Switch gear</span>
+            {leases.map((i) => (
+              <button key={i.account_id} className={item?.account_id === i.account_id ? "on" : ""}
+                onClick={() => setChosen(i.account_id)} title={`${i.name}, leased`}>
+                <img src={artUrl(i.image)} alt="" /><span>{i.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {rentable.length > 0 && (
+          <div className="rack">
+            <span className="rack-label">Rent more gear</span>
+            {rentable.map((i) => (
+              <button key={i.account_id} className="rent-chip" onClick={() => c.openItem(i.account_id)}
+                title={`${i.name}: ${STYLE_INFO[lookOf(i.image).style]}`}>
+                <img src={artUrl(i.image)} alt="" />
+                <span>{i.name}<small className="num">{fmtNear(i.price_per_hour)} NEAR/hr</small></span>
+              </button>
+            ))}
+          </div>
+        )}
         <p className="muted hint">
           Space or click to attack. With leased gear every strike is a real <code>use_item</code> transaction, signed in
           this browser by your session key. No wallet pop-ups, and the item account pays the gas.
@@ -276,9 +279,6 @@ export function Arena() {
   );
 }
 
-function nameOf(key: string) {
-  return key.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-}
 
 // =================================================================== game
 
