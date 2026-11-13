@@ -1,0 +1,228 @@
+# LeaseKey
+
+**Game items that rent themselves out on NEAR. No collateral, no trust.**
+
+Built at the NEAR Hackathon 2026.
+
+## The problem
+
+Renting an item in a Web3 game today means one of two bad deals:
+
+- **Transfer it and trust the renter** to give it back. This is the "scholarship" model, where owners lost items and earnings.
+- **Lock collateral** worth the whole item, which shuts out exactly the players who cannot afford the item.
+
+Owners sit on idle items. Players who cannot afford them cannot play.
+
+## The solution
+
+1. **Every item is its own NEAR account.** Minting `Flame Sword` creates the NEP-171 token and the sub-account `flame-sword-1.<factory>.testnet`. That account runs the item contract, holds its own rent and state, and has **no full-access key**. Only its code controls it.
+2. **Renting never moves the NFT.** The item account adds a **function-call access key** for the renter, restricted to `receiver_id = the item account` and `method_names = ["use_item"]`. The renter can play. The renter cannot transfer, sell, unlist or withdraw, because the protocol itself rejects those transactions.
+3. **Expiry is enforced in code.** NEAR keys do not expire, so `use_item` checks the block time and the signing key. After expiry anyone can call `end_rental`, which deletes the key and pays everyone.
+4. **Rent is escrowed in the item account** and split automatically between the owner and the game creator.
+5. **Players never notice the chain.** The session key lives in the browser, signs as the item account, and the item account pays the gas. Every sword strike in the demo game is a real transaction with no wallet pop-up.
+
+### Why this only works on NEAR
+
+- **Named sub-accounts** let an asset be an account that owns money and state.
+- **Function-call access keys** give a scoped, revocable permission at the protocol level, so "can play but cannot steal" needs no trust in our code path for transfers.
+- **Global contracts** let every item account share one immutable code hash, so an item account costs about 0.15 NEAR instead of 1.8 NEAR.
+
+## Live on NEAR testnet
+
+| What | Where |
+|---|---|
+| Factory and NEP-171 contract | [`leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet) |
+| Example item account | [`flame-sword-1.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/flame-sword-1.leasekey-lq3d9s.testnet) |
+| Demo item owner | `owner.leasekey-lq3d9s.testnet` |
+| Item code mode | Global contract, referenced by code hash |
+| Frontend | Run locally with `npm run dev` (see below). Hosted link: not deployed yet, see "Known limitations". |
+
+The IDs are also in [`web/src/deployment.json`](web/src/deployment.json) and [`.env.example`](.env.example). The frontend reads them by default, so a fresh clone talks to this deployment with no configuration.
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Owner
+    participant F as Factory (NEP-171)
+    participant I as Item account
+    participant R as Renter wallet
+    participant K as Session key (browser)
+    participant A as Anyone / keeper
+
+    O->>F: mint(name, price, royalty)
+    F->>I: create sub-account, attach item code, init
+    F-->>O: NFT minted to owner
+    O->>I: list(price_per_hour)
+    R->>I: rent(public_key, duration) + rent + gas budget
+    I->>I: add function-call key (use_item only)
+    loop every attack, no wallet pop-up
+        K->>I: use_item("slash") signed as the item account
+        I-->>K: power, uses left, durability (event logged)
+    end
+    Note over I: block time passes ends_at
+    K-xI: use_item rejected: "lease expired"
+    A->>I: end_rental()
+    I->>I: delete session key
+    I-->>O: owner share of rent
+    I-->>F: creator royalty
+    I-->>R: unused gas budget
+```
+
+## Run it
+
+### Prerequisites
+
+| Tool | Version tested | Needed for |
+|---|---|---|
+| Node.js | 22 or 24 | frontend, deploy, keeper, testnet check |
+| Rust | 1.98.1 (pinned in `rust-toolchain.toml`, installed automatically by rustup) | building and testing contracts |
+| cargo-near | 0.23.0 | building contracts |
+| OS | Linux, macOS, or Windows with WSL2 | the contract sandbox tests do not run on native Windows |
+
+The built contracts are committed in `res/`, so the frontend, the deploy script and the testnet check need **only Node.js**.
+
+Install cargo-near (only for building contracts):
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+```
+
+### 1. Install
+
+```bash
+git clone <this repo> leasekey && cd leasekey
+npm install
+npm --prefix web install
+```
+
+### 2. Run the frontend against the live testnet deployment
+
+```bash
+npm run dev
+```
+
+Open http://localhost:5173, click **Play as guest**, rent the Flame Sword for 2 minutes, and play. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet.
+
+### 3. Verify the live deployment from the command line (about 90 seconds)
+
+```bash
+npm run e2e
+```
+
+This rents an item for 60 seconds with a fresh faucet account, strikes three times with the session key, proves the key cannot do anything else, waits for expiry, and settles. It prints `PASS` per check and ends with `E2E OK`.
+
+### 4. Build and test the contracts
+
+```bash
+bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
+cd tests && cargo test         # 12 sandbox integration tests
+cd .. && cargo test            # unit tests for the rent, refund and split math
+```
+
+The first `cargo test` in `tests/` downloads the NEAR sandbox binary and takes a few minutes to compile.
+
+### 5. Deploy your own copy to testnet (optional)
+
+```bash
+bash scripts/deploy.sh                 # global-contract mode, 5 demo items
+MODE=embedded bash scripts/deploy.sh   # fallback: copy the wasm into every item account
+```
+
+The script creates throwaway faucet accounts, deploys, seeds demo items, and rewrites `web/src/deployment.json`. Keys are stored in `.leasekey/keys`, which is git-ignored. It never touches mainnet.
+
+### 6. Run the keeper (optional)
+
+```bash
+npm run keeper            # loops, ends every expired rental
+npm run keeper -- --once  # single pass
+```
+
+## Features and how to verify them
+
+Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to the steps in [DEMO.md](DEMO.md).
+
+| Feature | How to verify |
+|---|---|
+| Mint creates the NFT and the item's own account | test `mint_creates_item_account_and_nft`, demo step 1 |
+| List and unlist | test `rent_validates_payment_listing_and_duration`, My Items page |
+| Rent adds a key restricted to `use_item` on the item account | test `rent_adds_restricted_session_key_and_use_item_works` |
+| `use_item` works only with the renter's key | test `use_item_rejects_strangers_and_wrong_keys` |
+| Renter cannot transfer, sell or withdraw | test `renter_cannot_transfer_sell_or_withdraw`, demo step 5, `npm run e2e` |
+| Key is rejected after expiry | test `key_rejected_after_expiry`, demo step 6 |
+| `end_rental` by anyone deletes the key and settles | test `end_rental_deletes_key_splits_revenue_and_never_settles_twice` |
+| No double settlement | same test, `npm run e2e` |
+| Revenue split, owner plus creator royalty | same test, unit test `split_math` |
+| Owner cannot rug during a rental | test `owner_cannot_rug_during_rental` |
+| A transfer of the NFT carries the lease over intact | test `owner_cannot_rug_during_rental` |
+| Early return with pro-rata refund, 5% fee | test `early_return_refunds_unused_time_pro_rata`, unit test `pro_rata_refund_math` |
+| Item ledger view `get_item` | every test reads it; Marketplace page |
+| Global-contract mode | test `global_contract_mode_mints_and_rents` |
+| Durability and repair (P1) | test `durability_wears_down_and_owner_repairs` |
+| Extend a running lease (P1) | test `extend_adds_time_and_rent`, "+2 min" in the game |
+| Gameplay with no wallet pop-ups | demo step 4: the on-chain feed shows one transaction per strike |
+
+## Architecture
+
+| Path | What it is |
+|---|---|
+| `contracts/item` | Item contract on every item account: rental state, `use_item`, `end_rental`, early return, extend, durability, earnings and split |
+| `contracts/leasekey` | Factory and NEP-171 NFT contract: mint, transfer, enumeration, listing index, item code management |
+| `tests/` | near-workspaces sandbox tests for every P0 rule |
+| `web/` | Vite, React, TypeScript: Marketplace, My Items, Slime Arena |
+| `scripts/` | `build.sh`, `deploy.sh`, `deploy.ts`, `keeper.ts`, `e2e.ts` |
+| `res/` | Built wasm files |
+| `assets/` | Original CC0 item art |
+
+**Mode shipped: per-item sub-accounts with a global contract.** The fallback single-contract mode was not needed. The factory also supports an embedded mode that copies the wasm into each item account, and the sandbox tests run in both modes.
+
+**Money flow.** `rent` takes the rent plus a gas budget of at least 0.01 NEAR. Each `use_item` is charged a flat 0.0005 NEAR against that budget, which covers the measured gas cost of about 0.0002 NEAR that the item account pays. At settlement the unused budget returns to the renter. Every payout uses a callback, and a failed transfer is credited to a `claim()` balance, so funds cannot get stuck.
+
+## Security notes
+
+**What the renter's session key can do**
+
+- Call `use_item` on the one item account it was added to, until the lease expires or the gas budget is used up.
+
+**What it cannot do, enforced by the NEAR protocol**
+
+- Call any other method on the item account.
+- Call any other contract, including the NFT contract.
+- Attach or transfer any NEAR. Function-call keys cannot carry a deposit.
+- Spend more gas than its allowance, which equals the gas budget the renter paid.
+
+**What the owner cannot do during a rental**
+
+- Unlist, change the price, end the rental early, or revoke the key. There is no burn method.
+- The owner may transfer the NFT. The lease continues unchanged and the rent goes to whoever owns the NFT at settlement.
+
+**Known limitations**
+
+- The factory account still has a full-access key held by the deployer. A malicious deployer could upgrade the factory and reassign item owners. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
+- After expiry the key stays on the account until someone calls `end_rental`. The contract rejects it in the meantime. The keeper and the game client both call `end_rental`.
+- The session key is stored in the browser's `localStorage`. It can only play, so a leak costs at most the remaining gas budget.
+- The shortest rental is 60 seconds, the longest is set per item, 2 hours for the demo items.
+- Guest mode depends on the public testnet faucet, and public testnet RPC endpoints are rate limited. Set `VITE_RPC_URL` or `NEAR_RPC_URL` to use your own.
+- The wallet path uses NEAR Wallet Selector with MyNearWallet and Meteor. The automated checks and our manual run-through exercised the guest path; the wallet path is implemented but less tested.
+- The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
+- Not audited. Testnet only.
+
+## Target tracks
+
+- **NFTs That Do Something.** The NFT is an account. It owns money, earns rent, pays royalties and hands out scoped access rights by itself.
+- **Games With Real Economies.** The loop is a game first: rent a sword, fight slimes, lose the sword when the lease ends. Durability and repair fees are a sink. Players never see a wallet during play.
+- **Social Money.** Rent splits between owner and creator on every settlement, and lending needs no collateral or trust, which is the basis for guild and scholarship lending.
+
+## What's next
+
+- Renter reputation with a minimum-reputation setting per listing.
+- Gasless renting through meta transactions (NEP-366) and a relayer, so the renter needs no NEAR at all.
+- Guild pools owned by a Sputnik DAO, with a rent share to the treasury.
+- Rent paid in any token through NEAR Intents.
+- Remove the factory's full-access key and move upgrades to a DAO.
+- Shrink the item wasm, currently 182 KB.
+
+## License
+
+MIT. Item art is original and CC0.

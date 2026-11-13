@@ -1,0 +1,53 @@
+# Progress
+
+Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
+
+## Decisions
+
+- **Mode shipped:** per-item sub-accounts with a NEAR global contract referenced by code hash. Verified in the sandbox and on testnet. The single-contract fallback was not needed.
+- **Gas model:** the session key signs as the item account, so the item pays gas. The renter prepays a gas budget, charged 0.0005 NEAR per use, with the rest refunded at settlement.
+- **Transfers during a rental:** allowed, the lease carries over intact and rent goes to the owner at settlement.
+- **Guest mode:** the frontend can create a faucet-funded testnet account in one click, so the demo needs no wallet.
+- **Build environment:** contracts build and test on Linux, macOS or WSL. The sandbox does not run on native Windows.
+
+## P0
+
+- [x] Mint item: NFT plus item sub-account with metadata
+- [x] List and unlist
+- [x] Rent: payment plus public key, restricted function-call key added
+- [x] `use_item`: validates key and time, records usage, emits event
+- [x] `end_rental`: anyone after expiry, deletes key, settles, no double settlement
+- [x] Owner-can't-rug guarantee, with test
+- [x] Early return with pro-rata refund, 5% fee
+- [x] Revenue split: owner plus creator royalty, set at mint
+- [x] Item ledger view `get_item`
+- [x] near-workspaces tests for every P0 rule (12 passing)
+- [x] Testnet deploy and seed script, 5 demo items live
+- [x] Keeper script
+- [x] Frontend: Marketplace, My Items, Slime Arena mini game
+- [x] End-to-end check against live testnet (`npm run e2e`)
+- [x] README, DEMO.md, LICENSE, .env.example
+
+## P1
+
+- [x] Durability and wear, owner repair for a fee
+- [x] Extend rental while active
+- [ ] Renter reputation and `min_reputation` on listings
+- [ ] Gasless renting via meta transactions (NEP-366) and a relayer
+
+## P2
+
+- [ ] Guild pools owned by a Sputnik DAO
+- [ ] Rent in any token via NEAR Intents
+- [ ] Per-match pricing, multi-item loadouts
+
+## Still to do before submission
+
+- [ ] Host the frontend (Vercel or Netlify) and add the link to the README. Needs the repo owner's hosting account.
+- [ ] Push the repo to GitHub and replace `<this repo>` in the README.
+- [ ] Record the 90-second demo from DEMO.md.
+- [ ] Test the wallet path (MyNearWallet, Meteor) by hand with a real testnet wallet.
+
+## Biggest remaining risk
+
+Public testnet RPC rate limits during the live demo or the judges' run. The scripts back off and retry, and the frontend fails over between two endpoints, but a private RPC URL in `VITE_RPC_URL` removes the risk.
