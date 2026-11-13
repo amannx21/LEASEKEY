@@ -29,7 +29,7 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
 - [x] docs/DESIGN-QA.md: every product question with answer and fix
 - [x] Testnet deploy and seed script, 12 demo items live, including armour
 - [x] Keeper script
-- [x] Frontend: landing page with axe-throw hero and live charts, Armory with class filters and detail panel, Arena with eight attack styles and practice mode, My Items
+- [x] Frontend: landing page with axe-throw hero and live charts, Armory with class filters and detail panel, Arena with eight attack styles and a rent-more-gear strip, My Items with wrapping and a game studio, developer page
 - [x] End-to-end check against live testnet (`npm run e2e`)
 - [x] README, DEMO.md, LICENSE, .env.example
 
