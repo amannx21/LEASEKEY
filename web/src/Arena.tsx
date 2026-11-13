@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EXPLORER, FACTORY_ID, Session, errorText, fmtNear, sessionKeyFor, type Settlement } from "./near";
+import { EXPLORER, FACTORY_ID, Session, call, errorText, fmtNear, sessionKeyFor, type Settlement } from "./near";
 import { useChain } from "./store";
 import { AccountLink, artUrl, fmtClock, itemColors, useTimeLeft } from "./ui";
 
@@ -368,6 +368,18 @@ export function Arena() {
                   {" · "}{usesLeft} strikes left · power {item.power}
                 </small>
               </div>
+              {timeLeft > 0 && (
+                <button
+                  disabled={!!c.busy}
+                  title="Add 2 minutes to this lease. Same session key."
+                  onClick={() =>
+                    c.run("Extending lease…", (me) =>
+                      call(me, item.account_id, "extend", { extra_secs: "120" },
+                        (BigInt(item.price_per_hour) * 120n) / 3600n + 1n))}
+                >
+                  +2 min
+                </button>
+              )}
             </div>
           ) : (
             <div className="weapon dead">

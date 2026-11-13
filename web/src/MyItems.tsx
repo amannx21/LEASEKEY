@@ -135,6 +135,17 @@ function RentedRow({ item }: { item: ItemView }) {
         {status === "rented" && (
           <button
             disabled={!!c.busy}
+            onClick={() =>
+              c.run("Extending lease…", (me) =>
+                call(me, item.account_id, "extend", { extra_secs: "300" },
+                  (BigInt(item.price_per_hour) * 300n) / 3600n + 1n))}
+          >
+            Extend 5 min
+          </button>
+        )}
+        {status === "rented" && (
+          <button
+            disabled={!!c.busy}
             onClick={async () => {
               const s = await c.run("Returning early…", (me) => call<Settlement>(me, item.account_id, "return_early"));
               if (s) c.toast("ok", `Returned early. Refund ${fmtNear(s.renter_refund, 4)} NEAR for unused time and gas.`);

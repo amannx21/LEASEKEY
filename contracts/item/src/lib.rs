@@ -365,6 +365,32 @@ impl Item {
         }
     }
 
+    /// Renter adds time to a lease that is still running. The session key stays the same.
+    #[payable]
+    pub fn extend(&mut self, extra_secs: U64) -> Rental {
+        let price = self.price_per_hour;
+        let max_secs = self.max_secs;
+        let rental = self.rental.as_mut().unwrap_or_else(|| env::panic_str("item is not rented"));
+        let caller = env::predecessor_account_id();
+        require!(caller == rental.renter, "only the renter can extend");
+        require!(now_ms() < rental.ends_at.0, "lease already expired");
+        require!(extra_secs.0 > 0, "extra_secs must be positive");
+        let new_end = rental.ends_at.0 + extra_secs.0 * 1000;
+        require!(
+            new_end - rental.starts_at.0 <= max_secs * 1000,
+            format!("total lease cannot exceed {max_secs} seconds")
+        );
+        let cost = rent_cost(price, extra_secs.0);
+        let attached = env::attached_deposit().as_yoctonear();
+        require!(attached >= cost, format!("attach {cost} yoctoNEAR"));
+        rental.ends_at = U64(new_end);
+        rental.rent_paid = U128(rental.rent_paid.0 + cost);
+        let updated = rental.clone();
+        self.pay(caller, attached - cost);
+        self.emit("rental_extended", &format!(r#""ends_at":"{new_end}""#));
+        updated
+    }
+
     /// Renter gives the item back before expiry and gets unused time refunded.
     pub fn return_early(&mut self) -> Settlement {
         let rental = self.rental.clone().unwrap_or_else(|| env::panic_str("item is not rented"));

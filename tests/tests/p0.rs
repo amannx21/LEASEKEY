@@ -527,3 +527,38 @@ async fn global_contract_mode_mints_and_rents() -> anyhow::Result<()> {
     assert!(!c.has_key(&sk).await);
     Ok(())
 }
+
+/// P1: the renter can add time to a running lease; rent and expiry both grow.
+#[tokio::test]
+async fn extend_adds_time_and_rent() -> anyhow::Result<()> {
+    let c = setup(Mode::Embedded).await?;
+    let (session, sk) = c.rent(60).await?;
+    let before: u64 = c.view().await?["ends_at"].as_str().unwrap().parse()?;
+    let extra_cost = PRICE_PER_HOUR * 120 / 3600;
+
+    // Only the renter extends, and it must be paid for.
+    let r = c.owner.call(&c.item, "extend").args_json(json!({ "extra_secs": "120" }))
+        .deposit(NearToken::from_yoctonear(extra_cost)).transact().await?;
+    assert!(r.is_failure());
+    let r = c.renter.call(&c.item, "extend").args_json(json!({ "extra_secs": "120" })).transact().await?;
+    assert!(r.is_failure());
+    // Cannot exceed the listing's maximum duration (7200s).
+    let r = c.renter.call(&c.item, "extend").args_json(json!({ "extra_secs": "99999" }))
+        .deposit(NearToken::from_near(40)).transact().await?;
+    assert!(r.is_failure());
+
+    c.renter.call(&c.item, "extend").args_json(json!({ "extra_secs": "120" }))
+        .deposit(NearToken::from_yoctonear(extra_cost)).max_gas().transact().await?.into_result()?;
+    let v = c.view().await?;
+    let after: u64 = v["ends_at"].as_str().unwrap().parse()?;
+    assert_eq!(after - before, 120_000);
+    assert_eq!(v["rent_paid"], (PRICE_PER_HOUR * 60 / 3600 + extra_cost).to_string());
+
+    // Same session key keeps working, and the full rent is split at the end.
+    assert_eq!(c.use_item(&session).await?["uses"], 1);
+    c.expire().await?;
+    let s: Value = c.owner.call(&c.item, "end_rental").max_gas().transact().await?.json()?;
+    assert_eq!(s["rent_earned"], (PRICE_PER_HOUR * 60 / 3600 + extra_cost).to_string());
+    assert!(!c.has_key(&sk).await);
+    Ok(())
+}
