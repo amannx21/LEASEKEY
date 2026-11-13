@@ -70,7 +70,7 @@ async function main() {
   const factoryStorage = (BigInt(factoryWasm.length) * near(1)) / 100_000n;
   const codeCost = MODE === "global" ? (itemBytes * near(10)) / 100_000n : (itemBytes * near(1)) / 100_000n;
   const perItem = near("0.16") + (MODE === "embedded" ? codeCost : 0n);
-  const needed = factoryStorage + codeCost + perItem * BigInt(count) + near(3);
+  const needed = factoryStorage + codeCost + perItem * BigInt(count) + near(6);
   await fund(factoryId, needed);
 
   console.log(`==> 2/5 deploying factory + NFT contract (${factoryWasm.length} bytes)`);
@@ -91,22 +91,25 @@ async function main() {
   const ownerId = `owner.${factoryId}`;
   console.log(`==> 4/5 creating demo item owner ${ownerId}`);
   const ownerKey = KeyPair.fromRandom("ed25519");
-  await retry("owner", () =>
-    factory.createSubAccount("owner", ownerKey.getPublicKey(), perItem * BigInt(count) + near(1)));
+  await retry("owner", () => factory.createSubAccount("owner", ownerKey.getPublicKey(), near(1)));
   saveKey(ownerId, ownerKey.toString());
   const owner = accountFor(ownerId);
 
-  console.log(`==> 5/5 minting and listing ${count} demo items`);
+  // Only registered games can mint. The factory plays the demo's house game,
+  // "LeaseKey Arena", and mints the demo items to the demo owner.
+  console.log(`==> 5/5 registering the house game and minting ${count} demo items to the owner`);
+  await retry("register", () =>
+    factory.callFunction({ contractId: factoryId, methodName: "register_game", args: { name: "LeaseKey Arena" }, deposit: near("0.01") }));
   const mintDeposit = BigInt(await view<string>(factoryId, "mint_deposit"));
   const items: string[] = [];
   for (const it of DEMO_ITEMS.slice(0, count)) {
-    const minted = await owner.callFunction<{ token_id: string; item_account: string } | null>({
+    const minted = await factory.callFunction<{ token_id: string; item_account: string } | null>({
       contractId: factoryId,
       methodName: "mint",
       args: { args: {
         name: it.name, image: it.image, power: it.power,
         price_per_hour: near(it.price).toString(), max_secs: "7200",
-        royalty_bps: it.royalty_bps, creator: factoryId,
+        royalty_bps: it.royalty_bps, owner: ownerId,
       } },
       deposit: mintDeposit,
       gas: GAS,
@@ -119,9 +122,18 @@ async function main() {
     console.log(`   ${it.name.padEnd(16)} -> ${minted.item_account}  (${it.price} NEAR/hr)`);
   }
 
+  // A stand-in for another game's NFT collection, for the wrap demo.
+  const emberId = `ember.${factoryId}`;
+  const emberKey = KeyPair.fromRandom("ed25519");
+  await retry("ember", () => factory.createSubAccount("ember", emberKey.getPublicKey(), near("2.2")));
+  saveKey(emberId, emberKey.toString());
+  await retry("ember deploy", () => accountFor(emberId).deployContract(readFileSync(join(ROOT, "res", "demo-nft.wasm"))));
+  await accountFor(emberId).callFunction({ contractId: emberId, methodName: "new", args: { name: "Ember Realms" } });
+  console.log(`   demo collection "Ember Realms" -> ${emberId}`);
+
   const deployment: Deployment = {
     network: "testnet", factoryId, ownerId, mode: MODE, itemCodeHash, items,
-    deployedAt: new Date().toISOString(),
+    deployedAt: new Date().toISOString(), demoCollection: emberId, houseGame: factoryId,
   };
   writeFileSync(DEPLOYMENT_FILE, JSON.stringify(deployment, null, 2) + "\n");
 

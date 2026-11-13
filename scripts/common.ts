@@ -24,6 +24,8 @@ export type Deployment = {
   itemCodeHash?: string;
   items: string[];
   deployedAt: string;
+  demoCollection?: string;
+  houseGame?: string;
   /** Throwaway TESTNET account, deliberately public: funds guest accounts when the faucet is rate limited. */
   guestBank?: { accountId: string; secretKey: string };
 };

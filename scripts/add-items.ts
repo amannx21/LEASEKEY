@@ -16,6 +16,7 @@ const EXTRA = [
 const d = readDeployment();
 if (!d) throw new Error("no deployment");
 const owner = accountFor(d.ownerId);
+const house = accountFor(d.factoryId);
 if ((await owner.getBalance()) < near("0.8") && d.guestBank) {
   await accountFor(d.guestBank.accountId, d.guestBank.secretKey).transfer({ receiverId: d.ownerId, amount: near("1") });
 }
@@ -27,11 +28,11 @@ for (const it of EXTRA) {
     console.log(`${it.name} already exists`);
     continue;
   }
-  const minted = await owner.callFunction<{ item_account: string } | null>({
+  const minted = await house.callFunction<{ item_account: string } | null>({
     contractId: d.factoryId, methodName: "mint",
     args: { args: {
       name: it.name, image: it.image, power: it.power, price_per_hour: near(it.price).toString(),
-      max_secs: "7200", royalty_bps: it.royalty_bps, creator: d.factoryId,
+      max_secs: "7200", royalty_bps: it.royalty_bps, owner: d.ownerId,
     } },
     deposit, gas: 300n * TGAS, waitUntil: "FINAL",
   });

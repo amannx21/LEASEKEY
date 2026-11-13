@@ -62,6 +62,15 @@ export type LeaseKeyEvent = {
   data: Record<string, unknown> & { token_id: string };
 };
 
+export type ItemRef = {
+  token_id: string;
+  item_account: string;
+  owner: string;
+  game: string | null;
+  game_name: string | null;
+  origin: { contract: string; token_id: string } | null;
+};
+
 /** A plain function-call description any wallet (Wallet Selector, HOT, Meteor…) can sign. */
 export type CallSpec = { receiverId: string; methodName: string; args: Record<string, unknown>; deposit: bigint; gas: bigint };
 
@@ -113,15 +122,65 @@ export class LeaseKey {
     return (await this.listItems()).filter((i) => i.owner === accountId);
   }
 
+  /** The factory record of an item: owner, game and, for wrapped NFTs, the original. */
+  getItemRef(itemId: string): Promise<ItemRef | null> {
+    return this.view<ItemRef | null>(this.factoryId, "get_item_ref", { token_id: itemId.split(".")[0] });
+  }
+
+  /** The LeaseKey item wrapping an NFT from another collection, if any. */
+  findWrapped(originContract: string, originTokenId: string): Promise<ItemRef | null> {
+    return this.view<ItemRef | null>(this.factoryId, "find_wrapped", { origin_contract: originContract, origin_token_id: originTokenId });
+  }
+
   /**
-   * The check a game server makes before honouring an item: does this player
-   * hold a live lease (or own the item outright)?
+   * The check a game makes before honouring an item: does this player hold a
+   * live lease, or own the item while it is not leased out? Pass `games` to
+   * accept only items made by (or wrapped from) those games; by default a
+   * game should pass its own account.
    */
-  async canUse(itemId: string, accountId: string): Promise<{ ok: boolean; as: "owner" | "renter" | null; endsAt: number | null; power: number }> {
-    const i = await this.getItem(itemId);
-    if (i.renter === accountId && i.rental_active) return { ok: true, as: "renter", endsAt: Number(i.ends_at), power: i.power };
-    if (i.owner === accountId && !i.renter) return { ok: true, as: "owner", endsAt: null, power: i.power };
-    return { ok: false, as: null, endsAt: null, power: i.power };
+  async canUse(
+    itemId: string,
+    accountId: string,
+    opts: { games?: string[] } = {},
+  ): Promise<{ ok: boolean; as: "owner" | "renter" | null; endsAt: number | null; power: number; game: string | null; reason?: string }> {
+    const [i, ref] = await Promise.all([this.getItem(itemId), this.getItemRef(itemId)]);
+    const game = ref?.game ?? null;
+    const base = { power: i.power, game };
+    if (opts.games && (!game || !opts.games.includes(game))) {
+      return { ok: false, as: null, endsAt: null, ...base, reason: "item belongs to another game" };
+    }
+    if (i.renter === accountId && i.rental_active) return { ok: true, as: "renter", endsAt: Number(i.ends_at), ...base };
+    if (i.owner === accountId && !i.renter) return { ok: true, as: "owner", endsAt: null, ...base };
+    return { ok: false, as: null, endsAt: null, ...base, reason: i.renter ? "leased to someone else" : "not leased to this player" };
+  }
+
+  // ------------------------------------------------------------- wrapping
+
+  /** Two calls that wrap an NFT the player owns into a rentable LeaseKey item. Sign them in order. */
+  async wrapActions(originContract: string, originTokenId: string, listing: { name: string; pricePerHour: bigint; image?: string; power?: number; royaltyBps?: number }): Promise<[CallSpec, CallSpec]> {
+    const deposit = BigInt(await this.view<string>(this.factoryId, "mint_deposit"));
+    return [
+      { receiverId: this.factoryId, methodName: "deposit_for_wrap", args: {}, deposit, gas: 10n * TGAS },
+      {
+        receiverId: originContract,
+        methodName: "nft_transfer_call",
+        args: {
+          receiver_id: this.factoryId,
+          token_id: originTokenId,
+          msg: JSON.stringify({
+            name: listing.name, image: listing.image, power: listing.power,
+            price_per_hour: listing.pricePerHour.toString(), royalty_bps: listing.royaltyBps,
+          }),
+        },
+        deposit: 1n,
+        gas: 300n * TGAS,
+      },
+    ];
+  }
+
+  /** Gives the original NFT back. Fails while the item is on lease. */
+  unwrapAction(itemId: string): CallSpec {
+    return { receiverId: this.factoryId, methodName: "unwrap", args: { token_id: itemId.split(".")[0] }, deposit: 1n, gas: 150n * TGAS };
   }
 
   /** Rent (in yoctoNEAR) for `secs` seconds, excluding the refundable gas budget. */
@@ -171,19 +230,22 @@ export class LeaseKey {
     return parseOutcome<Settlement>(await renter.callFunctionRaw({ contractId: itemId, methodName: "return_early", args: {}, gas: 100n * TGAS, waitUntil: "FINAL" }));
   }
 
-  /** Mints a new item for the caller and lists it. `creator` receives the royalty, usually the game. */
+  /**
+   * A registered game mints an item to a player (`owner`, default the game itself).
+   * The game is the creator and earns the royalty. Listing is done by the owner.
+   */
   async mintAndList(
-    owner: Account,
-    item: { name: string; image: string; power: number; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; creator?: string },
+    game: Account,
+    item: { name: string; image: string; power: number; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; owner?: string },
   ): Promise<{ token_id: string; item_account: string }> {
     const deposit = BigInt(await this.view<string>(this.factoryId, "mint_deposit"));
     const minted = parseOutcome<{ token_id: string; item_account: string } | null>(
-      await owner.callFunctionRaw({
+      await game.callFunctionRaw({
         contractId: this.factoryId,
         methodName: "mint",
         args: { args: {
           name: item.name, image: item.image, power: item.power, price_per_hour: item.pricePerHour.toString(),
-          max_secs: String(item.maxSecs ?? 7200), royalty_bps: item.royaltyBps ?? 1000, creator: item.creator ?? null,
+          max_secs: String(item.maxSecs ?? 7200), royalty_bps: item.royaltyBps ?? 1000, owner: item.owner ?? null,
         } },
         deposit,
         gas: 300n * TGAS,
@@ -191,7 +253,9 @@ export class LeaseKey {
       }),
     );
     if (!minted) throw new Error("mint failed, deposit refunded");
-    await owner.callFunctionRaw({ contractId: minted.item_account, methodName: "list", args: {}, waitUntil: "FINAL" });
+    if (!item.owner || item.owner === game.accountId) {
+      await game.callFunctionRaw({ contractId: minted.item_account, methodName: "list", args: {}, waitUntil: "FINAL" });
+    }
     return minted;
   }
 }
