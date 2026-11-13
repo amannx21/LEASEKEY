@@ -9,7 +9,12 @@ import deployment from "./deployment.json";
 
 const env = import.meta.env;
 export const FACTORY_ID: string = env.VITE_FACTORY_ID || (deployment as any).factoryId || "";
-export const RPC_URL: string = env.VITE_RPC_URL || "https://test.rpc.fastnear.com";
+// Public testnet RPCs are rate limited, so calls fail over between several.
+export const RPC_URLS: string[] = [
+  ...(env.VITE_RPC_URL ? [env.VITE_RPC_URL as string] : []),
+  "https://test.rpc.fastnear.com",
+  "https://near-testnet.drpc.org",
+];
 export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const EXPLORER = "https://testnet.nearblocks.io";
 
@@ -18,7 +23,9 @@ export const TGAS = 10n ** 12n;
 /** Refundable budget that pays the gas of the renter's game actions. */
 export const GAS_BUDGET = NEAR / 20n; // 0.05 NEAR = 100 attacks
 
-export const provider = new providers.JsonRpcProvider({ url: RPC_URL });
+export const provider = new providers.FailoverRpcProvider(
+  RPC_URLS.map((url) => new providers.JsonRpcProvider({ url }, { retries: 4, backoff: 1.7, wait: 700 })),
+);
 
 export type ItemView = {
   token_id: string;
@@ -290,7 +297,7 @@ export class Session {
       try {
         const publicKey = this.keyPair.getPublicKey().toString();
         const [key, block] = await Promise.all([
-          provider.viewAccessKey(this.itemId, publicKey),
+          provider.viewAccessKey(this.itemId, this.keyPair.getPublicKey()),
           provider.viewBlock({ finality: "final" }),
         ]);
         this.nonce = BigInt(key.nonce);

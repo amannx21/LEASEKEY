@@ -52,6 +52,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (document.hidden) return; // do not spend RPC quota in a background tab
     try {
       setItems(await loadItems());
       const who = meRef.current;
@@ -65,7 +66,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 5000);
+    const t = setInterval(refresh, 8000);
     return () => clearInterval(t);
   }, [refresh]);
 

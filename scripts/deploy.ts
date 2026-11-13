@@ -6,12 +6,12 @@
 //
 // Uses only throwaway accounts funded by the public testnet faucet. Keys are
 // written to .leasekey/keys (git-ignored). Never touches mainnet.
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { KeyPair } from "near-api-js";
 import {
-  DEPLOYMENT_FILE, ROOT, TGAS, accountFor, createFaucetAccount, fmt, near, provider,
+  DEPLOYMENT_FILE, KEYS_DIR, ROOT, TGAS, accountFor, createFaucetAccount, fmt, near, provider,
   randomSuffix, retry, saveKey, view, type Deployment,
 } from "./common.ts";
 
@@ -29,16 +29,22 @@ const DEMO_ITEMS = [
 ];
 
 async function balance(id: string): Promise<bigint> {
-  return BigInt((await provider.viewAccount(id)).amount);
+  return retry("balance", async () => BigInt((await provider.viewAccount(id)).amount));
 }
 
 /** Tops the factory up by draining extra faucet accounts into it. */
 async function fund(factoryId: string, target: bigint) {
+  // Funder accounts left over from an interrupted run are drained first.
+  const leftovers = existsSync(KEYS_DIR)
+    ? readdirSync(KEYS_DIR).filter((f) => f.startsWith("lk-fund-")).map((f) => f.replace(/.json$/, ""))
+    : [];
   for (let i = 0; i < 4 && (await balance(factoryId)) < target; i++) {
-    const id = `lk-fund-${randomSuffix()}.testnet`;
+    const id = leftovers.pop() ?? `lk-fund-${randomSuffix()}.testnet`;
     console.log(`   balance ${fmt(await balance(factoryId))} NEAR < ${fmt(target)} needed: adding faucet account ${id}`);
     const funder = await createFaucetAccount(id);
-    await retry("drain funder", () => funder.deleteAccount(factoryId));
+    await retry("drain funder", () => funder.deleteAccount(factoryId)).catch((e) =>
+      console.log(`   (funder ${id} unusable: ${String(e.message).slice(0, 80)})`));
+    rmSync(join(KEYS_DIR, `${id}.json`), { force: true });
   }
   const have = await balance(factoryId);
   if (have < target) throw new Error(`could not fund ${factoryId}: have ${fmt(have)}, need ${fmt(target)} NEAR`);

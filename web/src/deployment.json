@@ -1,15 +1,15 @@
 {
   "network": "testnet",
-  "factoryId": "leasekey-i67g6n.testnet",
-  "ownerId": "owner.leasekey-i67g6n.testnet",
+  "factoryId": "leasekey-lq3d9s.testnet",
+  "ownerId": "owner.leasekey-lq3d9s.testnet",
   "mode": "global",
-  "itemCodeHash": "1b789df852668f1ad5b0929e6eb3e9c5ac331e933ce4b592a262c6b52f766d46",
+  "itemCodeHash": "de4bcd670b371d789f1eb8ef787a25a4ab01c57ebfd69eb7b1073a8d59a2ac90",
   "items": [
-    "flame-sword-1.leasekey-i67g6n.testnet",
-    "frost-bow-2.leasekey-i67g6n.testnet",
-    "thunder-hammer-3.leasekey-i67g6n.testnet",
-    "shadow-dagger-4.leasekey-i67g6n.testnet",
-    "guardian-shield-5.leasekey-i67g6n.testnet"
+    "flame-sword-1.leasekey-lq3d9s.testnet",
+    "frost-bow-2.leasekey-lq3d9s.testnet",
+    "thunder-hammer-3.leasekey-lq3d9s.testnet",
+    "shadow-dagger-4.leasekey-lq3d9s.testnet",
+    "guardian-shield-5.leasekey-lq3d9s.testnet"
   ],
-  "deployedAt": "2026-11-13T06:27:26.654Z"
+  "deployedAt": "2026-11-13T06:53:26.354Z"
 }

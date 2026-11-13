@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Account, KeyPair, KeyPairSigner, providers } from "near-api-js";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Public testnet RPCs are rate limited: set NEAR_RPC_URL to use your own.
 export const RPC_URL = process.env.NEAR_RPC_URL ?? "https://test.rpc.fastnear.com";
 export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const KEYS_DIR = join(ROOT, ".leasekey", "keys");
@@ -12,7 +13,8 @@ export const DEPLOYMENT_FILE = join(ROOT, "web", "src", "deployment.json");
 
 export const NEAR = 10n ** 24n;
 export const TGAS = 10n ** 12n;
-export const provider = new providers.JsonRpcProvider({ url: RPC_URL });
+// Retries with backoff when the RPC answers 429.
+export const provider = new providers.JsonRpcProvider({ url: RPC_URL }, { retries: 7, backoff: 1.7, wait: 1200 });
 
 export type Deployment = {
   network: "testnet";
@@ -43,6 +45,7 @@ export async function retry<T>(label: string, fn: () => Promise<T>, tries = 4): 
       return await fn();
     } catch (e) {
       if (i >= tries) throw e;
+      if (/429|rate limit/i.test(String((e as Error).message))) await sleep(15000);
       console.log(`   (${label} failed: ${String((e as Error).message).slice(0, 120)}; retry ${i})`);
       await sleep(2000 * i);
     }
@@ -67,6 +70,7 @@ export function accountFor(accountId: string, secretKey?: string): Account {
 
 /** Creates a throwaway testnet account funded by the public testnet faucet. */
 export async function createFaucetAccount(accountId: string): Promise<Account> {
+  if (loadKey(accountId)) return accountFor(accountId); // already created on an earlier run
   const keyPair = KeyPair.fromRandom("ed25519");
   const res = await fetch(FAUCET_URL, {
     method: "POST",
@@ -78,13 +82,13 @@ export async function createFaucetAccount(accountId: string): Promise<Account> {
   });
   if (!res.ok) throw new Error(`faucet refused ${accountId}: ${res.status} ${await res.text()}`);
   saveKey(accountId, keyPair.toString());
-  // Wait until the account is visible on the RPC node.
-  for (let i = 0; i < 20; i++) {
+  // Wait until the account and its key are visible on the RPC node.
+  for (let i = 0; i < 30; i++) {
     try {
-      await provider.viewAccount(accountId);
+      await provider.viewAccessKey(accountId, keyPair.getPublicKey());
       break;
     } catch {
-      await sleep(1000);
+      await sleep(1500);
     }
   }
   return accountFor(accountId, keyPair.toString());
