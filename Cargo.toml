@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["contracts/item", "contracts/leasekey"]
+members = ["contracts/item", "contracts/leasekey", "contracts/demo-nft"]
 exclude = ["tests"]
 
 [profile.release]

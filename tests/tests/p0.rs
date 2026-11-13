@@ -55,7 +55,15 @@ async fn setup(mode: Mode) -> anyhow::Result<Ctx> {
     let renter = worker.dev_create_account().await?;
 
     let mint_deposit: String = factory.view("mint_deposit").await?.json()?;
-    let minted: Value = owner
+    // The game (creator) registers, then mints the item to the player (owner).
+    creator
+        .call(factory.id(), "register_game")
+        .args_json(json!({ "name": "Slime Arena" }))
+        .deposit(NearToken::from_millinear(10))
+        .transact()
+        .await?
+        .into_result()?;
+    let minted: Value = creator
         .call(factory.id(), "mint")
         .args_json(json!({ "args": {
             "name": "Flame Sword",
@@ -64,7 +72,7 @@ async fn setup(mode: Mode) -> anyhow::Result<Ctx> {
             "price_per_hour": PRICE_PER_HOUR.to_string(),
             "max_secs": "7200",
             "royalty_bps": ROYALTY_BPS,
-            "creator": creator.id(),
+            "owner": owner.id(),
         }}))
         .deposit(NearToken::from_yoctonear(mint_deposit.parse()?))
         .max_gas()

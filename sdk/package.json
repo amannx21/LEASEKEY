@@ -1,0 +1,16 @@
+{
+  "name": "@leasekey/sdk",
+  "version": "0.1.0",
+  "description": "Add trustless, collateral-free item rentals to any NEAR game",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src"],
+  "peerDependencies": {
+    "near-api-js": "^6.5.1",
+    "@near-js/transactions": "^2.5.1",
+    "@near-js/utils": "^2.5.1",
+    "@near-js/types": "^2.5.1"
+  }
+}

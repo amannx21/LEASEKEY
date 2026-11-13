@@ -137,8 +137,6 @@ footer { margin-top: 56px; color: var(--muted); font-size: 13.5px; border-top: 1
 
 .h-flash { transform-box: fill-box; transform-origin: center; opacity: 0; animation: flash 0.9s ease-out 1.68s both; }
 @keyframes flash { 0% { opacity: 0; transform: scale(0.3); } 15% { opacity: 1; } 100% { opacity: 0; transform: scale(1.4); } }
-.h-ring { transform-box: fill-box; transform-origin: center; opacity: 0; animation: ring 0.8s var(--ease) 1.7s both; }
-@keyframes ring { 0% { opacity: 1; transform: scale(0.4); } 100% { opacity: 0; transform: scale(5); } }
 
 .h-R { opacity: 0; transform-box: fill-box; transform-origin: 50% 60%; animation: r-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 1.72s both; }
 @keyframes r-in { 0% { opacity: 0; transform: scale(1.6) rotate(-14deg); filter: blur(8px); } 100% { opacity: 1; transform: none; filter: none; } }

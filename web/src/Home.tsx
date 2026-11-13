@@ -106,7 +106,6 @@ function Hero({ onEnter, onArena }: { onEnter: () => void; onArena: () => void }
 
         {/* impact */}
         <circle className="h-flash" cx="520" cy="250" r="150" fill="url(#h-flash)" />
-        <circle className="h-ring" cx="520" cy="250" r="40" fill="none" stroke="#ffcf6a" strokeWidth="3" />
 
         {/* the word */}
         <g className="h-word">
