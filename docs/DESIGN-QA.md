@@ -81,3 +81,37 @@ const { ok } = await lk.canUse(itemId, player, { games: [myGame] });
 `npm run sdk:example` runs this against testnet. The app's "For game developers" page has the same walkthrough.
 
 **Remaining gaps:** the SDK is not published to npm yet, and a game server that wants to verify moves must read `item_used` events through an indexer or RPC.
+
+## 9. Does the landing page describe what LeaseKey actually does?
+
+**Question:** The headline talked about bows and swords, and the copy predated games-only minting and wrapping.
+
+**Fix:** the headline is now "Rent in-game gear", and every section was rewritten for the current design:
+
+- The opening paragraph calls LeaseKey a rental layer for blockchain games, and says each item knows its game and pays both its owner and that game.
+- The lease timeline starts with "Arrive": a partner game mints the item, or a player wraps an NFT they already own.
+- The guarantees now include "the owner can never unwrap the original NFT mid-lease".
+
+## 10. How do players see which items belong to which game, and how is it enforced?
+
+**Fix:** a landing section, "Every item knows which game it belongs to", built from live chain data:
+
+- Each registered game is listed with its items.
+- Three worked examples show the rule: an item accepted in its own game, a different game's item rejected by default, and that same item accepted after a partnership.
+- The enforcement is on chain. Only registered games mint, the game is written into the item at creation and can never change, and a game checks `canUse(item, player, { games: [itself] })` before honouring an item.
+
+Every Armory card and item panel also shows the item's game.
+
+## 11. Can LeaseKey become an economy with partner games, without losing focus on rentals?
+
+**Answer:** Yes, and the incentive is built in. The game is the creator of the items it mints, so it earns a royalty on every lease without running a marketplace. LeaseKey stays a rental layer: it never sells items, it only lends them.
+
+**Fix:** a landing section, "An economy games plug into", with the four partner steps: register, mint to players or let them wrap, players rent to each other, the game earns per lease. Beside it is a live table of partner games with their items, leases and royalties earned, plus a "Partner with LeaseKey" button that leads to the developer page.
+
+**Remaining gap:** there is no revenue share to LeaseKey itself yet. A protocol fee on settlement is a single-line change in the item contract, but it would need the item code republished.
+
+## 12. The hero animation
+
+**Feedback:** replace the axe throw, and remove the stray circle.
+
+**Fix:** a gauntlet snap. The Astral Gauntlet, an original design, lights its five stones and snaps. Sound-wave arcs roll out, ash and embers stream from the fingertips and bend as the wave passes, and the dust settles into "Rent in-game gear". An aftershock then shakes each letter in turn, and electric glow crackles down both sides of the text. A soft pulse repeats every 7 seconds. It is drawn on a canvas at device resolution, and reduced-motion users see the final frame.

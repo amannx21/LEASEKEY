@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { FACTORY_ID, fmtNear, type ItemView } from "./near";
+import { FACTORY_ID, fmtNear, short, view, type ItemView } from "./near";
+import { HeroSnap } from "./HeroSnap";
 import { useChain } from "./store";
 import { AccountLink, Icon, statusOf } from "./ui";
 
@@ -20,116 +21,25 @@ function useReveal<T extends HTMLElement>() {
   return [ref, shown] as const;
 }
 
+type GameInfo = { account_id: string; name: string };
+
 export function Home() {
   const c = useChain();
+  const [games, setGames] = useState<GameInfo[]>([]);
+  useEffect(() => {
+    view<GameInfo[]>(FACTORY_ID, "get_games").then(setGames, () => setGames([]));
+  }, []);
   return (
     <div className="home">
-      <Hero onEnter={() => c.setPage("market")} onArena={() => c.setPage("arena")} />
+      <HeroSnap onEnter={() => c.setPage("market")} onArena={() => c.setPage("arena")} />
       <Problem />
       <Flow />
+      <GameBound items={c.items} games={games} />
       <Guarantees />
+      <Partners items={c.items} games={games} onPartner={() => c.setPage("build")} />
       <Economy items={c.items} />
       <Featured items={c.items} onOpen={(id) => c.openItem(id)} onAll={() => c.setPage("market")} />
     </div>
-  );
-}
-
-// ------------------------------------------------------------------- hero
-
-function Hero({ onEnter, onArena }: { onEnter: () => void; onArena: () => void }) {
-  const [run, setRun] = useState(0);
-  return (
-    <section className="hero">
-      <h1 className="sr-only">Rent legendary gear. Every item is its own NEAR account.</h1>
-      <svg key={run} className="hero-stage" viewBox="0 0 1200 560" aria-hidden="true">
-        <defs>
-          <linearGradient id="h-steel" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#fff7e0" />
-            <stop offset=".5" stop-color="#c9c3e6" />
-            <stop offset="1" stop-color="#5a5480" />
-          </linearGradient>
-          <linearGradient id="h-gold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#fff2c2" />
-            <stop offset=".55" stop-color="#e9b23f" />
-            <stop offset="1" stop-color="#7a4b0b" />
-          </linearGradient>
-          <linearGradient id="h-letter" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#fff6dc" />
-            <stop offset="1" stop-color="#e9c46a" />
-          </linearGradient>
-          <linearGradient id="h-cape" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#b3262f" />
-            <stop offset="1" stop-color="#4a0c18" />
-          </linearGradient>
-          <radialGradient id="h-flash" cx="50%" cy="50%" r="50%">
-            <stop offset="0" stop-color="#fff6dc" stop-opacity="1" />
-            <stop offset=".4" stop-color="#ffcf6a" stop-opacity=".6" />
-            <stop offset="1" stop-color="#ff8a3d" stop-opacity="0" />
-          </radialGradient>
-          <filter id="h-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="8" />
-          </filter>
-        </defs>
-
-        {/* ground line and dust */}
-        <path className="h-ground" d="M40 470 H1160" />
-
-        {/* warrior */}
-        <g className="h-warrior">
-          <path className="h-cape" d="M150 250 C120 300 104 380 96 462 L196 462 C190 380 196 300 196 254 Z" fill="url(#h-cape)" />
-          <path d="M160 340 L146 462 H170 L184 372 L198 462 H222 L212 340 Z" fill="#2b2547" />
-          <path d="M146 456 H174 V470 H140 Z M196 456 H226 L232 470 H196 Z" fill="#17142b" />
-          <path d="M148 246 C150 230 214 230 218 246 L224 344 H142 Z" fill="url(#h-steel)" stroke="#fff7e0" strokeWidth="1.5" />
-          <path d="M150 300 H218" stroke="url(#h-gold)" strokeWidth="8" />
-          <circle cx="181" cy="300" r="7" fill="#ff8a3d" />
-          <g className="h-arm-back"><path d="M150 256 L120 330 L136 336 L166 266 Z" fill="#c9c3e6" /></g>
-          <path d="M156 200 C156 172 208 172 208 200 V234 C208 246 156 246 156 234 Z" fill="url(#h-steel)" stroke="#fff7e0" strokeWidth="1.5" />
-          <path d="M160 214 H204 V222 H160 Z" fill="#17142b" />
-          <path d="M166 216 H198" stroke="#ffcf6a" strokeWidth="3" strokeLinecap="round" />
-          <path d="M182 172 C190 140 214 132 236 140 C214 150 202 162 196 178 Z" fill="#e9b23f" />
-          <g className="h-arm">
-            <path d="M212 256 L246 196 L262 206 L228 268 Z" fill="url(#h-steel)" stroke="#fff7e0" strokeWidth="1.5" />
-            <circle cx="254" cy="198" r="10" fill="#c9c3e6" />
-          </g>
-        </g>
-
-        {/* the thrown axe, drawn around its own centre */}
-        <g className="h-axe">
-          <g className="h-axe-spin">
-            <rect x="-6" y="-70" width="12" height="140" rx="5" fill="#5a3418" />
-            <path d="M6 -66 C52 -80 78 -44 70 -6 C62 -30 36 -36 6 -26 Z" fill="url(#h-gold)" stroke="#fff2c2" strokeWidth="2" />
-            <path d="M-6 -66 C-40 -74 -60 -50 -56 -24 C-48 -40 -28 -44 -6 -38 Z" fill="url(#h-steel)" stroke="#fff7e0" strokeWidth="2" />
-            <circle cx="0" cy="-58" r="5" fill="#ff8a3d" />
-          </g>
-          <path className="h-axe-trail" d="M-120 30 C-80 -10 -40 -10 0 0" fill="none" stroke="#ffcf6a" strokeWidth="6" strokeLinecap="round" />
-        </g>
-
-        {/* impact */}
-        <circle className="h-flash" cx="520" cy="250" r="150" fill="url(#h-flash)" />
-
-        {/* the word */}
-        <g className="h-word">
-          <text className="h-R" x="452" y="318" fill="url(#h-letter)">R</text>
-          <text className="h-rest" x="566" y="318" fill="url(#h-letter)">ent</text>
-          <text className="h-line2" x="458" y="410" fill="#f3ead7">legendary gear</text>
-        </g>
-        <text className="h-R-glow" x="452" y="318" fill="#ffcf6a" filter="url(#h-blur)">R</text>
-      </svg>
-
-      <div className="hero-copy">
-        <p className="lede">
-          Owners lend swords, bows and armour without handing them over. Renters play without collateral.
-          Every item is its own NEAR account that rents itself out and pays its owner.
-        </p>
-        <div className="hero-ctas">
-          <button className="primary big" onClick={onEnter}>
-            Enter the armory <Icon name="arrow" />
-          </button>
-          <button className="ghost big" onClick={onArena}>Fight in the arena</button>
-          <button className="link" onClick={() => setRun((n) => n + 1)}>Replay the throw</button>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -139,25 +49,29 @@ function Problem() {
   const [ref, shown] = useReveal<HTMLElement>();
   return (
     <section ref={ref} className={`problem ${shown ? "in" : ""}`}>
-      <h2>Lending gear in games has always meant trusting a stranger.</h2>
+      <h2>Lending in-game items has always meant trusting a stranger.</h2>
+      <p className="section-lede">
+        In blockchain games, players truly own their items. That is exactly what makes lending them risky.
+      </p>
       <div className="problem-grid">
         <div className="old">
-          <h3>Until now, you could</h3>
+          <h3>Until now, an owner could</h3>
           <p>
             <b>Hand the item over</b> and hope it comes back. Scholarship programs lost items and earnings this way.
           </p>
           <p>
-            <b>Lock collateral</b> worth the whole item. That shuts out exactly the players who cannot afford it.
+            <b>Demand collateral</b> worth the whole item. That shuts out exactly the players who cannot afford it.
           </p>
         </div>
         <div className="new">
           <h3>With LeaseKey</h3>
           <p>
-            The sword stays with its owner. The renter gets a <b>key that can only swing it</b>, until the clock runs
-            out.
+            The item stays with its owner. The renter gets a <b>key that can only use it in the game</b>, until the clock
+            runs out.
           </p>
           <p>
-            No collateral and no trust. When time is up, anyone can close the lease and the rent splits itself.
+            No collateral and no trust. When time is up, anyone can close the lease, and the rent splits itself between
+            the owner and the game.
           </p>
         </div>
       </div>
@@ -168,11 +82,11 @@ function Problem() {
 // ------------------------------------------------------------------- flow
 
 const STEPS = [
-  { name: "Mint", text: "The item is born as its own account, like flame-sword.leasekey.testnet." },
-  { name: "List", text: "The owner sets a price per hour. The item waits in the armory." },
+  { name: "Arrive", text: "A partner game mints the item to a player, or a player wraps an NFT they already own. Either way it gets its own account." },
+  { name: "List", text: "The owner sets a price per hour. The item waits in the armory, labelled with its game." },
   { name: "Rent", text: "A renter pays rent plus a small refundable gas budget. No collateral." },
-  { name: "Play", text: "The item adds a key for the renter's browser that can only call use_item." },
-  { name: "Settle", text: "When time is up the key is deleted and rent splits between owner and creator." },
+  { name: "Play", text: "The item adds a key for the renter's device that can only call use_item. The game checks the item is one of its own." },
+  { name: "Settle", text: "When time is up the key is deleted. Rent splits between the owner and the game's royalty." },
 ];
 
 function Flow() {
@@ -201,9 +115,9 @@ function Flow() {
 
 function Guarantees() {
   const [ref, shown] = useReveal<HTMLElement>();
-  const yes = ["Swing the item in the game", "Play without a wallet pop-up on every strike", "Return early and get unused time back"];
+  const yes = ["Use the item in its game", "Play without a wallet pop-up on every action", "Return early and get unused time back"];
   const no = ["Transfer or sell the item", "Withdraw the item's earnings", "Call any other contract", "Keep playing after the lease ends"];
-  const owner = ["Cancel or unlist mid-lease", "Revoke the renter's key", "Burn the item"];
+  const owner = ["Cancel or unlist mid-lease", "Revoke the renter's key", "Unwrap the original NFT mid-lease", "Burn the item"];
   return (
     <section ref={ref} className={`guarantees ${shown ? "in" : ""}`}>
       <h2>Enforced by the chain, not by promises</h2>
@@ -220,6 +134,131 @@ function Guarantees() {
           <h3><Icon name="shield" /> The owner can never</h3>
           <ul>{owner.map((t) => <li key={t}>{t}</li>)}</ul>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ------------------------------------------------------- items know games
+
+function GameBound({ items, games }: { items: ItemView[]; games: GameInfo[] }) {
+  const [ref, shown] = useReveal<HTMLElement>();
+  const byGame = games
+    .map((g) => ({ ...g, items: items.filter((i) => i.game === g.account_id) }))
+    .filter((g) => g.items.length);
+  const home = byGame[0];
+  const other = byGame.find((g) => g.account_id !== home?.account_id);
+  const homeItem = home?.items[0];
+  const otherItem = other?.items[0];
+
+  return (
+    <section ref={ref} className={`gamebound ${shown ? "in" : ""}`}>
+      <h2>Every item knows which game it belongs to</h2>
+      <p className="section-lede">
+        Only registered games can create items, and the game is written into the item when it is made. It can never be
+        changed, so nobody can mint a free copy of your sword and pass it off as the real thing.
+      </p>
+
+      <div className="gb-grid">
+        <div className="gb-games">
+          {byGame.map((g) => (
+            <div key={g.account_id} className="gb-game">
+              <div className="gb-head">
+                <b>{g.name}</b>
+                <AccountLink id={g.account_id} />
+              </div>
+              <div className="gb-items">
+                {g.items.slice(0, 8).map((i) => (
+                  <img key={i.account_id} src={artUrl(i.image)} alt={i.name} title={i.name} />
+                ))}
+                {g.items.length > 8 && <span className="num">+{g.items.length - 8}</span>}
+              </div>
+              <small>
+                {g.items.length} {g.items.length === 1 ? "item" : "items"}
+                {g.items.some((i) => i.origin) && " · includes NFTs wrapped from this game's own collection"}
+              </small>
+            </div>
+          ))}
+        </div>
+
+        <div className="gb-rules">
+          <h3>What a game accepts is its own choice</h3>
+          {homeItem && home && (
+            <div className="rule ok">
+              <img src={artUrl(homeItem.image)} alt="" />
+              <p><b>{homeItem.name}</b> in <b>{home.name}</b><span>Accepted. It is one of {home.name}'s own items.</span></p>
+            </div>
+          )}
+          {otherItem && other && home && (
+            <div className="rule no">
+              <img src={artUrl(otherItem.image)} alt="" />
+              <p><b>{otherItem.name}</b> in <b>{home.name}</b><span>Rejected by default. It belongs to {other.name}.</span></p>
+            </div>
+          )}
+          {otherItem && other && home && (
+            <div className="rule ok">
+              <img src={artUrl(otherItem.image)} alt="" />
+              <p><b>{otherItem.name}</b> in <b>{home.name}</b>, after a partnership<span>Accepted, because {home.name} chose to add {other.name} to its list.</span></p>
+            </div>
+          )}
+          <p className="fine">
+            A game runs one check before honouring an item: <code>canUse(item, player, {"{ games: [itself] }"})</code>.
+            Try it on the developer page.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- partners
+
+function Partners({ items, games, onPartner }: { items: ItemView[]; games: GameInfo[]; onPartner: () => void }) {
+  const [ref, shown] = useReveal<HTMLElement>();
+  const rows = games.map((g) => {
+    const mine = items.filter((i) => i.game === g.account_id);
+    return {
+      ...g,
+      items: mine.length,
+      leases: mine.reduce((s, i) => s + i.rental_count, 0),
+      royalty: mine.reduce((s, i) => s + BigInt(i.creator_earnings), 0n),
+    };
+  });
+  return (
+    <section ref={ref} className={`partners ${shown ? "in" : ""}`}>
+      <div className="pt-grid">
+        <div>
+          <h2>An economy games plug into</h2>
+          <p className="section-lede">
+            LeaseKey stays focused on one job: renting. Games bring the items, and every lease pays them.
+          </p>
+          <ol className="pt-steps">
+            <li><b>Register your game.</b> One call, 0.01 NEAR. Your account becomes the game's identity.</li>
+            <li><b>Mint your in-game items to players,</b> or let players wrap the NFTs they already own from your collection.</li>
+            <li><b>Players rent them to each other.</b> Owners earn from idle items, newcomers play without buying in.</li>
+            <li><b>You earn a royalty on every lease,</b> paid automatically when it settles. No marketplace to run.</li>
+          </ol>
+          <button className="primary big" onClick={onPartner}>Partner with LeaseKey <Icon name="arrow" /></button>
+        </div>
+        <figure className="chart pt-table">
+          <figcaption>Partner games, live from testnet</figcaption>
+          <table>
+            <thead>
+              <tr><th scope="col">Game</th><th scope="col">Items</th><th scope="col">Leases</th><th scope="col">Royalties earned</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.account_id}>
+                  <td><b>{r.name}</b><small>{short(r.account_id)}</small></td>
+                  <td className="num">{r.items}</td>
+                  <td className="num">{r.leases}</td>
+                  <td className="num">{fmtNear(r.royalty, 5)} NEAR</td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={4} className="muted">Loading partner games…</td></tr>}
+            </tbody>
+          </table>
+        </figure>
       </div>
     </section>
   );
