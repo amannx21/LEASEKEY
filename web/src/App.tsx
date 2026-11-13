@@ -1,4 +1,5 @@
 import { Arena } from "./Arena";
+import { Build } from "./Build";
 import { Home } from "./Home";
 import { Market } from "./Market";
 import { MyItems } from "./MyItems";
@@ -11,6 +12,7 @@ const TABS: [Page, string][] = [
   ["market", "Armory"],
   ["arena", "Arena"],
   ["mine", "My Items"],
+  ["build", "For game devs"],
 ];
 
 export function App() {
@@ -65,6 +67,7 @@ export function App() {
           {c.page === "market" && <Market />}
           {c.page === "arena" && <Arena />}
           {c.page === "mine" && <MyItems />}
+          {c.page === "build" && <Build />}
         </main>
       )}
 

@@ -173,7 +173,7 @@ export class LeaseKey {
           }),
         },
         deposit: 1n,
-        gas: 300n * TGAS,
+        gas: 150n * TGAS,
       },
     ];
   }
@@ -248,7 +248,7 @@ export class LeaseKey {
           max_secs: String(item.maxSecs ?? 7200), royalty_bps: item.royaltyBps ?? 1000, owner: item.owner ?? null,
         } },
         deposit,
-        gas: 300n * TGAS,
+        gas: 150n * TGAS,
         waitUntil: "FINAL",
       }),
     );

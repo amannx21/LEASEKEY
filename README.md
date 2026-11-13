@@ -19,7 +19,8 @@ Owners sit on idle items. Players who cannot afford them cannot play.
 2. **Renting never moves the NFT.** The item account adds a **function-call access key** for the renter, restricted to `receiver_id = the item account` and `method_names = ["use_item"]`. The renter can play. The renter cannot transfer, sell, unlist or withdraw, because the protocol itself rejects those transactions.
 3. **Expiry is enforced in code.** NEAR keys do not expire, so `use_item` checks the block time and the signing key. After expiry anyone can call `end_rental`, which deletes the key and pays everyone.
 4. **Rent is escrowed in the item account** and split automatically between the owner and the game creator.
-5. **Players never notice the chain.** The session key lives in the browser, signs as the item account, and the item account pays the gas. Every sword strike in the demo game is a real transaction with no wallet pop-up.
+5. **Only games create items, and any NFT can join.** Registered games mint items to their players and earn a royalty on every rental, so nobody can mint a free copy. Players can also **wrap** an NFT they already own in any NEAR game collection: LeaseKey holds the original in escrow, gives it a rentable account, and returns it on unwrap.
+6. **Players never notice the chain.** The session key lives in the browser, signs as the item account, and the item account pays the gas. Every sword strike in the demo game is a real transaction with no wallet pop-up.
 
 ### Why this only works on NEAR
 
@@ -34,6 +35,8 @@ Owners sit on idle items. Players who cannot afford them cannot play.
 | Factory and NEP-171 contract | [`leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet) |
 | Example item account | [`flame-sword-1.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/flame-sword-1.leasekey-lq3d9s.testnet) |
 | Demo item owner | `owner.leasekey-lq3d9s.testnet` |
+| House game (mints the demo items) | "LeaseKey Arena", the factory account |
+| Demo "other game" collection for wrapping | [`ember.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/ember.leasekey-lq3d9s.testnet), "Ember Realms" |
 | Item code mode | Global contract, referenced by code hash |
 | Frontend | Run locally with `npm run dev` (see below). Hosted link: not deployed yet, see "Known limitations". |
 
@@ -117,7 +120,7 @@ This rents an item for 60 seconds with a fresh throwaway account, strikes three 
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
-cd tests && cargo test         # 12 sandbox integration tests
+cd tests && cargo test         # 15 sandbox integration tests
 cd .. && cargo test            # unit tests for the rent, refund and split math
 ```
 
@@ -141,7 +144,7 @@ npm run keeper -- --once  # single pass
 
 ## Features and how to verify them
 
-Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to the steps in [DEMO.md](DEMO.md).
+Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.rs`](tests/tests/games.rs). "Demo" refers to the steps in [DEMO.md](DEMO.md).
 
 | Feature | How to verify |
 |---|---|
@@ -162,7 +165,12 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 | Durability and repair (P1) | test `durability_wears_down_and_owner_repairs` |
 | Extend a running lease (P1) | test `extend_adds_time_and_rent`, "+2 min" in the game |
 | Gameplay with no wallet pop-ups | demo step 4: the on-chain feed shows one transaction per strike |
-| 12 items with eight distinct attack styles | Armory page; the practice rack in the Arena |
+| 12 items with eight distinct attack styles | Armory page, then fight in the Arena |
+| Only registered games can mint; items record their game | test `only_registered_games_mint_and_items_record_their_game`; My Items, Game studio |
+| Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
+| Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
+| Owner and game shown on every item; "Mine" filter | Armory page |
+| Game integration SDK | `npm run sdk:example`; "For game devs" page |
 | Live economy charts read from chain | landing page, "The economy, live from testnet" |
 
 ## Architecture
@@ -170,10 +178,13 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 | Path | What it is |
 |---|---|
 | `contracts/item` | Item contract on every item account: rental state, `use_item`, `end_rental`, early return, extend, durability, earnings and split |
-| `contracts/leasekey` | Factory and NEP-171 NFT contract: mint, transfer, enumeration, listing index, item code management |
+| `contracts/leasekey` | Factory and NEP-171 NFT contract: game registry, game-only minting, wrapping and unwrapping of external NFTs, transfer, enumeration, listing index |
+| `contracts/demo-nft` | A plain NEP-171 collection standing in for another game's items |
+| `sdk/` | TypeScript SDK for games: rent, session keys, `canUse`, wrapping |
+| `docs/DESIGN-QA.md` | Hard design questions, with answers and the fixes they led to |
 | `tests/` | near-workspaces sandbox tests for every P0 rule |
 | `web/` | Vite, React, TypeScript: landing page, Armory, Arena, My Items |
-| `scripts/` | `build.sh`, `deploy.sh`, `deploy.ts`, `keeper.ts`, `e2e.ts` |
+| `scripts/` | `build.sh`, `deploy.sh`, `deploy.ts`, `upgrade.ts`, `keeper.ts`, `e2e.ts` |
 | `res/` | Built wasm files |
 | `assets/` | Original CC0 item art |
 
@@ -197,11 +208,12 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 **What the owner cannot do during a rental**
 
 - Unlist, change the price, end the rental early, or revoke the key. There is no burn method.
+- Unwrap a wrapped NFT. The factory changes the item's owner and unlists it in one receipt, so if a lease exists the whole step reverts.
 - The owner may transfer the NFT. The lease continues unchanged and the rent goes to whoever owns the NFT at settlement.
 
 **Known limitations**
 
-- The factory account still has a full-access key held by the deployer. A malicious deployer could upgrade the factory and reassign item owners. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
+- The factory account still has a full-access key held by the deployer, and was used once to upgrade the factory in place. A malicious deployer could upgrade it again and reassign item owners or release escrowed NFTs. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
 - After expiry the key stays on the account until someone calls `end_rental`. The contract rejects it in the meantime. The keeper and the game client both call `end_rental`.
 - The session key is stored in the browser's `localStorage`. It can only play, so a leak costs at most the remaining gas budget.
 - The shortest rental is 60 seconds, the longest is set per item, 2 hours for the demo items.
@@ -209,6 +221,8 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 - Public testnet RPC endpoints are rate limited. Set `VITE_RPC_URL` or `NEAR_RPC_URL` to use your own.
 - The wallet path uses NEAR Wallet Selector with MyNearWallet and Meteor. The automated checks and our manual run-through exercised the guest path; the wallet path is implemented but less tested.
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
+- Wrapping costs the same as a mint and is prepaid with `deposit_for_wrap`, because an NFT transfer carries no NEAR. Unused credit can be withdrawn.
+- Items store a generic `power` and durability. Game-specific stats stay with the game, or in the original NFT for wrapped items.
 - Not audited. Testnet only.
 
 ## Target tracks
@@ -219,6 +233,10 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs). "Demo" refers to
 
 ## What's next
 
+See [docs/DESIGN-QA.md](docs/DESIGN-QA.md) for the design questions behind these.
+
+- Publish the SDK to npm.
+- Several royalty receivers per item, for items honoured by more than one game.
 - Renter reputation with a minimum-reputation setting per listing.
 - Gasless renting through meta transactions (NEP-366) and a relayer, so the renter needs no NEAR at all.
 - Guild pools owned by a Sputnik DAO, with a rent share to the treasury.

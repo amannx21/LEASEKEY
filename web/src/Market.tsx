@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { GAS_BUDGET, fmtNear, sessionKeyFor, type ItemView } from "./near";
+import { GAS_BUDGET, fmtNear, sessionKeyFor, short, type ItemView } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatusBadge, statusOf } from "./ui";
 
@@ -18,20 +18,24 @@ export function Market() {
   const [cls, setCls] = useState<ItemClass | "All">("All");
   const [sort, setSort] = useState<Sort>("power");
   const [onlyFree, setOnlyFree] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
+  const me = c.me?.accountId;
   const [q, setQ] = useState("");
 
+  const visible = useMemo(() => c.items.filter((i) => i.listed || i.renter || i.owner === me), [c.items, me]);
   const counts = useMemo(() => {
-    const m = new Map<string, number>([["All", c.items.length]]);
-    for (const i of c.items) m.set(lookOf(i.image).cls, (m.get(lookOf(i.image).cls) ?? 0) + 1);
+    const m = new Map<string, number>([["All", visible.length]]);
+    for (const i of visible) m.set(lookOf(i.image).cls, (m.get(lookOf(i.image).cls) ?? 0) + 1);
     return m;
-  }, [c.items]);
+  }, [visible]);
 
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
-    const list = c.items.filter(
+    const list = visible.filter(
       (i) =>
         (cls === "All" || lookOf(i.image).cls === cls) &&
         (!onlyFree || statusOf(i) === "available") &&
+        (!onlyMine || i.owner === me || i.renter === me) &&
         (!term || i.name.toLowerCase().includes(term) || lookOf(i.image).homage.includes(term)),
     );
     const price = (i: ItemView) => BigInt(i.price_per_hour);
@@ -41,7 +45,7 @@ export function Market() {
       const d = price(a) - price(b);
       return (sort === "price-asc" ? 1 : -1) * (d > 0n ? 1 : d < 0n ? -1 : 0);
     });
-  }, [c.items, cls, sort, onlyFree, q]);
+  }, [visible, cls, sort, onlyFree, onlyMine, me, q]);
 
   const open = c.items.find((i) => i.account_id === c.openId) ?? null;
 
@@ -55,10 +59,13 @@ export function Market() {
             owner.
           </p>
         </div>
+        <div className="head-actions">
+          <button className="ghost" onClick={() => c.setPage("mine")}>List your item</button>
         <label className="search">
           <Icon name="spark" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the armory" aria-label="Search items" />
         </label>
+        </div>
       </header>
 
       <div className="toolbar" role="toolbar" aria-label="Filter items">
@@ -71,6 +78,12 @@ export function Market() {
           ))}
         </div>
         <div className="tools">
+          {me && (
+            <label className="toggle">
+              <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
+              <span>Mine</span>
+            </label>
+          )}
           <label className="toggle">
             <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
             <span>Available now</span>
@@ -88,12 +101,12 @@ export function Market() {
       {!c.loading && shown.length === 0 && (
         <div className="empty-inline">
           <p>Nothing matches. {onlyFree ? "Everything in this class is on lease right now." : "Try another class."}</p>
-          <button className="ghost" onClick={() => { setCls("All"); setOnlyFree(false); setQ(""); }}>Show everything</button>
+          <button className="ghost" onClick={() => { setCls("All"); setOnlyFree(false); setOnlyMine(false); setQ(""); }}>Show everything</button>
         </div>
       )}
 
       <div className="gallery">
-        {shown.map((item) => <ItemCard key={item.account_id} item={item} onOpen={() => c.openItem(item.account_id)} />)}
+        {shown.map((item) => <ItemCard key={item.account_id} item={item} me={me} onOpen={() => c.openItem(item.account_id)} />)}
       </div>
 
       {open && <ItemSheet item={open} onClose={() => c.openItem(null)} />}
@@ -101,7 +114,12 @@ export function Market() {
   );
 }
 
-function ItemCard({ item, onOpen }: { item: ItemView; onOpen: () => void }) {
+function gameLabel(item: ItemView) {
+  if (item.origin) return `${item.game_name ?? short(item.origin.contract)} · wrapped`;
+  return item.game_name ?? "Unregistered game";
+}
+
+function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: () => void }) {
   const look = lookOf(item.image);
   const r = rarityOf(item.power);
   const status = statusOf(item);
@@ -120,6 +138,10 @@ function ItemCard({ item, onOpen }: { item: ItemView; onOpen: () => void }) {
       </span>
       <b className="item-name">{item.name}</b>
       <span className="item-tag">{look.tagline}</span>
+      <span className="item-meta">
+        <span>{gameLabel(item)}</span>
+        <span className={item.owner === me ? "yours" : ""}>{item.owner === me ? "Yours" : `Owner ${short(item.owner)}`}</span>
+      </span>
       <span className="item-power" aria-label={`Power ${item.power}`}>
         <span className="pw-track"><span style={{ width: `${Math.min(100, (item.power / 80) * 100)}%` }} /></span>
         <span className="num">{item.power}</span>
@@ -176,6 +198,8 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
             <div><dt>Leases so far</dt><dd className="num">{item.rental_count}</dd></div>
             <div><dt>Owner</dt><dd><AccountLink id={item.owner} />{mine && " (you)"}</dd></div>
             <div><dt>Its own account</dt><dd><AccountLink id={item.account_id} /></dd></div>
+            <div><dt>Game</dt><dd>{item.origin ? <>Wrapped from <AccountLink id={item.origin.contract} /></> : item.game_name ?? "Unregistered"}</dd></div>
+            {item.origin && <div><dt>Original NFT</dt><dd className="num">#{item.origin.token_id}, held in escrow</dd></div>}
           </dl>
 
           {status === "available" && !mine && (

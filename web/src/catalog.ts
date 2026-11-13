@@ -78,6 +78,7 @@ export function lookOf(image: string): Look {
 }
 
 export function artUrl(image: string): string {
+  if (/^https?:\/\//.test(image)) return image;
   const key = image.replace(/\.svg$/, "");
   return `/items/${LOOKS[key] ? key : "generic"}.svg`;
 }

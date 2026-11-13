@@ -17,6 +17,8 @@ export const RPC_URLS: string[] = [
 ];
 export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const EXPLORER = "https://testnet.nearblocks.io";
+export const DEMO_COLLECTION: string = (deployment as any).demoCollection || "";
+export const HOUSE_GAME: string = (deployment as any).houseGame || FACTORY_ID;
 
 export const NEAR = 10n ** 24n;
 export const TGAS = 10n ** 12n;
@@ -56,6 +58,19 @@ export type ItemView = {
   rental_count: number;
   total_uses: number;
   now_ms: string;
+  /** From the factory: the game that made the item, or the collection it wraps. */
+  game: string | null;
+  game_name: string | null;
+  origin: { contract: string; token_id: string } | null;
+};
+
+export type ItemRef = {
+  token_id: string;
+  item_account: string;
+  owner: string;
+  game: string | null;
+  game_name: string | null;
+  origin: { contract: string; token_id: string } | null;
 };
 
 export type Settlement = {
@@ -92,8 +107,15 @@ export const chainNow = () => Date.now() + clockOffset;
 
 export async function loadItems(): Promise<ItemView[]> {
   if (!FACTORY_ID) return [];
-  const refs = await view<{ item_account: string }[]>(FACTORY_ID, "get_items", { limit: 100 });
-  const items = await Promise.all(refs.map((r) => view<ItemView>(r.item_account, "get_item")));
+  const refs = await view<ItemRef[]>(FACTORY_ID, "get_items", { limit: 100 });
+  const items = await Promise.all(
+    refs.map(async (r) => ({
+      ...(await view<Omit<ItemView, "game" | "game_name" | "origin">>(r.item_account, "get_item")),
+      game: r.game,
+      game_name: r.game_name,
+      origin: r.origin,
+    })),
+  );
   if (items.length) clockOffset = Number(items[0].now_ms) - Date.now();
   return items.sort((a, b) => a.token_id.localeCompare(b.token_id));
 }

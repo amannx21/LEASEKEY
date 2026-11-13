@@ -1,13 +1,17 @@
-import { useState } from "react";
-import { FACTORY_ID, call, fmtNear, parseNear, sessionKeyFor, view, type ItemView, type Settlement } from "./near";
+import { useCallback, useEffect, useState } from "react";
+import { ART_KEYS, artUrl, lookOf } from "./catalog";
+import {
+  DEMO_COLLECTION, FACTORY_ID, TGAS, call, fmtNear, parseNear, sessionKeyFor, view,
+  type ItemView, type Settlement,
+} from "./near";
 import { useChain } from "./store";
-import { AccountLink, Countdown, Durability, StatusBadge, artUrl, statusOf } from "./ui";
-import { ART_KEYS } from "./catalog";
+import { AccountLink, Countdown, Durability, Icon, StatusBadge, statusOf } from "./ui";
 
-const ART_CHOICES = ART_KEYS;
+type Tab = "own" | "rent" | "wrap" | "studio";
 
 export function MyItems() {
   const c = useChain();
+  const [tab, setTab] = useState<Tab>("own");
   if (!c.me) {
     return (
       <section className="empty">
@@ -17,28 +21,64 @@ export function MyItems() {
       </section>
     );
   }
-  const owned = c.items.filter((i) => i.owner === c.me!.accountId);
-  const rented = c.items.filter((i) => i.renter === c.me!.accountId);
+  const me = c.me.accountId;
+  const owned = c.items.filter((i) => i.owner === me);
+  const rented = c.items.filter((i) => i.renter === me);
   const total = owned.reduce((sum, i) => sum + BigInt(i.owner_earnings), 0n);
 
-  return (
-    <>
-      <section className="split">
-        <div>
-          <h2>Items I own</h2>
-          <p className="muted">
-            Total earned: <b>{fmtNear(total, 4)} NEAR</b>. Rent is paid to you automatically when a lease settles.
-          </p>
-          {owned.length === 0 && <p className="muted">You own no items yet. Mint one on the right.</p>}
-          {owned.map((item) => <OwnedRow key={item.account_id} item={item} />)}
+  const tabs: [Tab, string, number | null][] = [
+    ["own", "Items I own", owned.length],
+    ["rent", "Items I rent", rented.length],
+    ["wrap", "Bring an item from another game", null],
+    ["studio", "Game studio", null],
+  ];
 
-          <h2 style={{ marginTop: 28 }}>Items I rent</h2>
-          {rented.length === 0 && <p className="muted">No active leases. Rent something in the Marketplace.</p>}
-          {rented.map((item) => <RentedRow key={item.account_id} item={item} />)}
+  return (
+    <div className="mine">
+      <header className="mine-head">
+        <div>
+          <h1>My Items</h1>
+          <p className="section-lede">
+            Earned so far: <b className="num">{fmtNear(total, 4)} NEAR</b>. Rent is paid to you automatically when a lease
+            settles.
+          </p>
         </div>
-        <MintForm />
-      </section>
-    </>
+      </header>
+      <div className="chips" role="tablist">
+        {tabs.map(([t, label, n]) => (
+          <button key={t} role="tab" aria-selected={tab === t} className={`chip ${tab === t ? "on" : ""}`} onClick={() => setTab(t)}>
+            {label}{n !== null && <span className="num">{n}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="mine-body">
+        {tab === "own" && (
+          <>
+            {owned.length === 0 && (
+              <div className="empty-inline">
+                <p>You own no items yet. Items come from games, or you can bring one you already own from another game.</p>
+                <button className="primary" onClick={() => setTab("wrap")}>Bring an item from another game</button>
+              </div>
+            )}
+            {owned.map((item) => <OwnedRow key={item.account_id} item={item} />)}
+          </>
+        )}
+        {tab === "rent" && (
+          <>
+            {rented.length === 0 && (
+              <div className="empty-inline">
+                <p>No active leases.</p>
+                <button className="primary" onClick={() => c.setPage("market")}>Find something to rent</button>
+              </div>
+            )}
+            {rented.map((item) => <RentedRow key={item.account_id} item={item} />)}
+          </>
+        )}
+        {tab === "wrap" && <WrapPanel onDone={() => setTab("own")} />}
+        {tab === "studio" && <StudioPanel />}
+      </div>
+    </div>
   );
 }
 
@@ -56,17 +96,24 @@ function OwnedRow({ item }: { item: ItemView }) {
         <div className="row-title">
           <b>{item.name}</b> <StatusBadge item={item} />
         </div>
-        <AccountLink id={item.account_id} />
+        <p className="row-game">
+          {item.origin ? (
+            <>Wrapped from {item.game_name ?? "another game"} (<AccountLink id={item.origin.contract} /> #{item.origin.token_id})</>
+          ) : (
+            <>From {item.game_name ?? "an unregistered game"}</>
+          )}
+          {" · "}<AccountLink id={item.account_id} />
+        </p>
         <div className="stats">
-          <span>Earned <b>{fmtNear(item.owner_earnings, 4)}</b> NEAR</span>
-          <span>{item.rental_count} rentals</span>
+          <span>Earned <b className="num">{fmtNear(item.owner_earnings, 4)}</b> NEAR</span>
+          <span>{item.rental_count} {item.rental_count === 1 ? "lease" : "leases"}</span>
           <span>{item.total_uses} uses</span>
           <Durability item={item} />
         </div>
         {status === "rented" && (
           <p className="lease">
-            Leased to <AccountLink id={item.renter!} /> · <Countdown endsAt={item.ends_at} /> left ·
-            escrowed rent {fmtNear(item.rent_paid, 4)} NEAR. You cannot unlist or revoke until it ends.
+            Leased to <AccountLink id={item.renter!} /> · <Countdown endsAt={item.ends_at} /> left · escrowed rent{" "}
+            {fmtNear(item.rent_paid, 4)} NEAR. You cannot unlist, revoke or unwrap until it ends.
           </p>
         )}
       </div>
@@ -77,19 +124,30 @@ function OwnedRow({ item }: { item: ItemView }) {
         {(status === "available" || status === "unlisted") && (
           <>
             <label className="inline">
-              <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" />
+              <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" aria-label="Price per hour" />
               <span>NEAR/hr</span>
             </label>
-            <button
-              disabled={!!c.busy}
-              onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString() })}
-            >
+            <button disabled={!!c.busy} onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString() })}>
               {item.listed ? "Update price" : "List for rent"}
             </button>
             {item.listed && (
               <button className="ghost" disabled={!!c.busy} onClick={() => act("Unlisting…", "unlist")}>Unlist</button>
             )}
           </>
+        )}
+        {item.origin && !item.renter && (
+          <button
+            className="ghost"
+            disabled={!!c.busy}
+            title="Get the original NFT back. Only possible while the item is not on lease."
+            onClick={() =>
+              c.run("Unwrapping…", async (me) => {
+                await call(me, FACTORY_ID, "unwrap", { token_id: item.token_id }, 1n, 150n * TGAS);
+                c.toast("ok", `${item.name} is back in your ${item.origin!.contract} inventory.`);
+              })}
+          >
+            Unwrap
+          </button>
         )}
         {status === "rented" && (
           <button className="ghost" disabled={!!c.busy} onClick={() => act("Trying to unlist…", "unlist")}>
@@ -100,8 +158,7 @@ function OwnedRow({ item }: { item: ItemView }) {
           <button
             className="ghost"
             disabled={!!c.busy}
-            onClick={() =>
-              act("Repairing…", "repair", {}, BigInt(item.max_durability - item.durability) * 10n ** 20n)}
+            onClick={() => act("Repairing…", "repair", {}, BigInt(item.max_durability - item.durability) * 10n ** 20n)}
           >
             Repair ({fmtNear(BigInt(item.max_durability - item.durability) * 10n ** 20n, 4)} NEAR)
           </button>
@@ -122,6 +179,7 @@ function RentedRow({ item }: { item: ItemView }) {
         <div className="row-title">
           <b>{item.name}</b> <StatusBadge item={item} />
         </div>
+        <p className="row-game">Owned by <AccountLink id={item.owner} /></p>
         <div className="stats">
           {status === "rented" && <span><Countdown endsAt={item.ends_at} /> left</span>}
           <span>{item.uses} uses · {item.uses_left} left in gas budget</span>
@@ -131,15 +189,14 @@ function RentedRow({ item }: { item: ItemView }) {
       </div>
       <div className="row-actions">
         {status === "rented" && hasKey && (
-          <button className="primary" onClick={() => c.playWith(item.account_id)}>Play</button>
+          <button className="primary" onClick={() => c.playWith(item.account_id)}>Fight</button>
         )}
         {status === "rented" && (
           <button
             disabled={!!c.busy}
             onClick={() =>
               c.run("Extending lease…", (me) =>
-                call(me, item.account_id, "extend", { extra_secs: "300" },
-                  (BigInt(item.price_per_hour) * 300n) / 3600n + 1n))}
+                call(me, item.account_id, "extend", { extra_secs: "300" }, (BigInt(item.price_per_hour) * 300n) / 3600n + 1n))}
           >
             Extend 5 min
           </button>
@@ -155,58 +212,197 @@ function RentedRow({ item }: { item: ItemView }) {
             Return early
           </button>
         )}
-        {status === "expired" && (
-          <button onClick={() => c.endRental(item)} disabled={!!c.busy}>Settle lease</button>
-        )}
+        {status === "expired" && <button onClick={() => c.endRental(item)} disabled={!!c.busy}>Settle lease</button>}
       </div>
     </div>
   );
 }
 
-function MintForm() {
+// ---------------------------------------------------------------- wrapping
+
+type Nft = { token_id: string; metadata?: { title?: string; media?: string } };
+
+const EMBER_RELICS = [
+  ["Ember Greataxe", "flame-sword"],
+  ["Abyssal Trident", "tide-trident"],
+  ["Starforged Gauntlet", "astral-gauntlet"],
+  ["Halo of the Seraph", "seraph-helm"],
+] as const;
+
+function WrapPanel({ onDone }: { onDone: () => void }) {
   const c = useChain();
+  const me = c.me!.accountId;
+  const [collection, setCollection] = useState(DEMO_COLLECTION);
+  const [nfts, setNfts] = useState<Nft[] | null>(null);
+  const [pick, setPick] = useState<Nft | null>(null);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("0.08");
+  const [power, setPower] = useState(40);
+
+  const load = useCallback(async () => {
+    setNfts(null);
+    try {
+      setNfts(await view<Nft[]>(collection, "nft_tokens_for_owner", { account_id: me, limit: 50 }));
+    } catch {
+      setNfts([]);
+    }
+  }, [collection, me]);
+  useEffect(() => { if (collection) load(); }, [load, collection]);
+
+  const claim = async (title: string, look: string) => {
+    await c.run(`Claiming ${title}…`, (who) =>
+      call(who, DEMO_COLLECTION, "claim", { title, media: `${look}.svg` }, 2n * 10n ** 22n));
+    await load();
+  };
+
+  const wrap = async () => {
+    if (!pick) return;
+    const ok = await c.run(`Wrapping ${name || pick.metadata?.title}…`, async (who) => {
+      const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
+      const credit = BigInt(await view<string>(FACTORY_ID, "get_wrap_credit", { account_id: who.accountId }));
+      if (credit < deposit) await call(who, FACTORY_ID, "deposit_for_wrap", {}, deposit - credit, 10n * TGAS);
+      await call(who, collection, "nft_transfer_call", {
+        receiver_id: FACTORY_ID,
+        token_id: pick.token_id,
+        msg: JSON.stringify({
+          name: name || pick.metadata?.title || `Relic #${pick.token_id}`,
+          image: pick.metadata?.media ?? "",
+          power,
+          price_per_hour: parseNear(price).toString(),
+          royalty_bps: 500,
+        }),
+      }, 1n, 150n * TGAS);
+      return true;
+    });
+    if (ok) {
+      c.toast("ok", "Wrapped. The original is held in escrow and your item has its own rentable account. List it to earn.");
+      onDone();
+    }
+  };
+
+  return (
+    <div className="wrap-grid">
+      <section className="panel">
+        <h3>Bring an item you already own</h3>
+        <p className="muted">
+          Pick an NFT from any NEAR game collection. LeaseKey holds it in escrow and gives it its own rentable account.
+          Unwrap it any time it is not on lease to get the original back. Costs about 0.16 testnet NEAR, refunded if
+          anything fails.
+        </p>
+        <label>Game collection contract
+          <input value={collection} onChange={(e) => setCollection(e.target.value.trim())} placeholder="game-items.testnet" />
+        </label>
+        {nfts === null && <p className="muted">Reading your inventory…</p>}
+        {nfts && nfts.length === 0 && <p className="muted">You own nothing in this collection yet.</p>}
+        <div className="nft-pick">
+          {nfts?.map((n) => (
+            <button key={n.token_id} className={pick?.token_id === n.token_id ? "on" : ""}
+              onClick={() => { setPick(n); setName(n.metadata?.title ?? ""); }}>
+              <img src={artUrl(n.metadata?.media ?? "")} alt="" />
+              <span>{n.metadata?.title ?? `#${n.token_id}`}</span>
+            </button>
+          ))}
+        </div>
+        {pick && (
+          <div className="wrap-form">
+            <label>Name in LeaseKey<input value={name} maxLength={48} onChange={(e) => setName(e.target.value)} /></label>
+            <label>Price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
+            <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
+            <button className="primary big wide" disabled={!!c.busy} onClick={wrap}>Wrap and make rentable <Icon name="arrow" /></button>
+            <p className="fine">Two signatures: a refundable deposit for the item's account, then the NFT transfer into escrow.</p>
+          </div>
+        )}
+      </section>
+
+      {DEMO_COLLECTION && collection === DEMO_COLLECTION && (
+        <aside className="panel">
+          <h3>Try it with Ember Realms</h3>
+          <p className="muted">
+            Ember Realms is a stand-in for another game's item collection on testnet. Claim a free item into your
+            inventory there, then wrap it here.
+          </p>
+          <div className="claim-list">
+            {EMBER_RELICS.map(([title, look]) => (
+              <button key={title} disabled={!!c.busy} onClick={() => claim(title, look)}>
+                <img src={`/items/${look}.svg`} alt="" /> Claim {title}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ studio
+
+function StudioPanel() {
+  const c = useChain();
+  const me = c.me!.accountId;
+  const [game, setGame] = useState<{ name: string } | null | undefined>(undefined);
+  const [gameName, setGameName] = useState("");
   const [name, setName] = useState("Ember Blade");
   const [art, setArt] = useState("flame-sword");
   const [power, setPower] = useState(35);
   const [price, setPrice] = useState("0.1");
   const [royalty, setRoyalty] = useState(10);
+  const [player, setPlayer] = useState("");
+
+  const load = useCallback(() => view<{ name: string } | null>(FACTORY_ID, "get_game", { account_id: me }).then(setGame, () => setGame(null)), [me]);
+  useEffect(() => { load(); }, [load]);
+
+  if (game === undefined) return <p className="muted">Checking your studio…</p>;
+
+  if (!game) {
+    return (
+      <section className="panel studio">
+        <h3>Register your game</h3>
+        <p className="muted">
+          Only registered games can create items. Your account becomes the game: it mints items to players, earns a
+          royalty on every rental, and is shown on every item it makes. Players cannot mint copies of your items.
+        </p>
+        <label>Game name<input value={gameName} maxLength={40} onChange={(e) => setGameName(e.target.value)} placeholder="My Fantasy Game" /></label>
+        <button className="primary" disabled={!!c.busy || !gameName.trim()}
+          onClick={async () => { await c.run("Registering…", (who) => call(who, FACTORY_ID, "register_game", { name: gameName }, 10n ** 22n)); load(); }}>
+          Register for 0.01 NEAR
+        </button>
+      </section>
+    );
+  }
 
   const mint = () =>
-    c.run(`Minting ${name}…`, async (me) => {
+    c.run(`Minting ${name}…`, async (who) => {
       const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
-      const minted = await call<{ token_id: string; item_account: string } | null>(me, FACTORY_ID, "mint", {
+      const owner = player.trim() || me;
+      const minted = await call<{ token_id: string; item_account: string } | null>(who, FACTORY_ID, "mint", {
         args: {
-          name, image: `${art}.svg`, power,
-          price_per_hour: parseNear(price).toString(), max_secs: "7200",
-          royalty_bps: Math.round(royalty * 100), creator: FACTORY_ID,
+          name, image: `${art}.svg`, power, price_per_hour: parseNear(price).toString(), max_secs: "7200",
+          royalty_bps: Math.round(royalty * 100), owner,
         },
-      }, deposit, 300n * 10n ** 12n);
+      }, deposit, 150n * TGAS);
       if (!minted) throw new Error("mint failed, deposit refunded");
-      await call(me, minted.item_account, "list", {});
-      c.toast("ok", `${name} minted. It lives at ${minted.item_account} and is listed for rent.`);
+      if (owner === me) await call(who, minted.item_account, "list", {});
+      c.toast("ok", `${name} minted to ${owner}. It lives at ${minted.item_account}.`);
     });
 
   return (
-    <aside className="panel">
-      <h2>Mint an item</h2>
-      <p className="muted">Creates the NFT and its own NEAR account, then lists it. Costs about 0.16 NEAR.</p>
-      <label>Name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
+    <section className="panel studio">
+      <h3>{game.name} studio</h3>
+      <p className="muted">Mint items to your players. Each item gets its own account and records {game.name} as its game.</p>
+      <label>Item name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
       <label>Look</label>
       <div className="art-pick">
-        {ART_CHOICES.map((a) => (
-          <button key={a} className={a === art ? "on" : ""} onClick={() => setArt(a)}>
+        {ART_KEYS.map((a) => (
+          <button key={a} className={a === art ? "on" : ""} onClick={() => setArt(a)} title={lookOf(`${a}.svg`).tagline}>
             <img src={`/items/${a}.svg`} alt={a} />
           </button>
         ))}
       </div>
-      <label>Power: {power}
-        <input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} />
-      </label>
-      <label>Price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
-      <label>Game creator royalty: {royalty}%
-        <input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} />
-      </label>
-      <button className="primary" disabled={!!c.busy || !name.trim()} onClick={mint}>Mint and list</button>
-    </aside>
+      <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
+      <label>Suggested price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
+      <label>Your royalty on every rental: {royalty}%<input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} /></label>
+      <label>Give it to player (account ID, blank for yourself)<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
+      <button className="primary" disabled={!!c.busy || !name.trim()} onClick={mint}>Mint item</button>
+    </section>
   );
 }

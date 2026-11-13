@@ -21,7 +21,12 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 13 Nov 2026.
 - [x] Early return with pro-rata refund, 5% fee
 - [x] Revenue split: owner plus creator royalty, set at mint
 - [x] Item ledger view `get_item`
-- [x] near-workspaces tests for every P0 rule (12 passing)
+- [x] near-workspaces tests for every P0 rule (15 passing, including games and wrapping)
+- [x] Game registry: only games mint; items record their game
+- [x] Wrap any NEP-171 NFT into a rentable item, unwrap it back
+- [x] Testnet factory upgraded in place with a state migration
+- [x] TypeScript SDK and developer page
+- [x] docs/DESIGN-QA.md: every product question with answer and fix
 - [x] Testnet deploy and seed script, 12 demo items live, including armour
 - [x] Keeper script
 - [x] Frontend: landing page with axe-throw hero and live charts, Armory with class filters and detail panel, Arena with eight attack styles and practice mode, My Items
