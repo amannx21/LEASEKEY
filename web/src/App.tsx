@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Arena } from "./Arena";
 import { Build } from "./Build";
 import { Home } from "./Home";
@@ -14,6 +15,44 @@ const TABS: [Page, string][] = [
   ["mine", "My Items"],
   ["build", "For game devs"],
 ];
+
+/** Background themes. Text, fonts, gold and item colours are the same in all of them. */
+const THEMES: [string, string, string][] = [
+  ["violet", "Violet night", "#17122b"],
+  ["charcoal", "Charcoal", "#1b1d21"],
+  ["obsidian", "Obsidian black", "#111113"],
+  ["forge", "Forge (warm dark)", "#1b1612"],
+  ["midnight", "Midnight blue", "#111a29"],
+];
+const THEME_KEY = "leasekey:theme";
+
+function applyTheme(t: string) {
+  if (t === "violet") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+}
+try {
+  applyTheme(new URLSearchParams(location.search).get("theme") || localStorage.getItem(THEME_KEY) || "violet");
+} catch {
+  // storage blocked: keep the default
+}
+
+function ThemePick() {
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute("data-theme") || "violet");
+  const pick = (t: string) => {
+    setTheme(t);
+    applyTheme(t);
+    try { localStorage.setItem(THEME_KEY, t); } catch { /* not saved, still applied */ }
+  };
+  return (
+    <div className="theme-pick" role="group" aria-label="Background colour">
+      <span>Theme</span>
+      {THEMES.map(([id, label, sw]) => (
+        <button key={id} className={theme === id ? "on" : ""} title={label} aria-label={label} aria-pressed={theme === id}
+          style={{ ["--sw" as string]: sw }} onClick={() => pick(id)} />
+      ))}
+    </div>
+  );
+}
 
 export function App() {
   const c = useChain();
@@ -36,6 +75,7 @@ export function App() {
             </button>
           ))}
         </nav>
+        <ThemePick />
         <div className="who">
           {c.me ? (
             <>
