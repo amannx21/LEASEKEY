@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://leasekey.vercel.app"><b>Try it live</b></a> ·
+  <a href="https://x.com/Leasekeyy/status/2121737719416311874"><b>Watch the demo</b></a> ·
   <a href="#see-it"><b>See it</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#run-it"><b>Run it</b></a> ·
