@@ -46,7 +46,7 @@ export function suggestedPrice(power: number, maxSupply: number | null): bigint 
 export const NEAR = 10n ** 24n;
 export const TGAS = 10n ** 12n;
 /** Refundable budget that pays the gas of the renter's game actions. */
-export const GAS_BUDGET = NEAR / 20n; // 0.05 NEAR = 100 attacks
+export const GAS_BUDGET = NEAR / 10n; // 0.1 NEAR = 200 strikes per lease, unused part refunded
 
 const errText = (e: unknown) =>
   [(e as any)?.name, (e as any)?.type, (e as any)?.message, String((e as any)?.cause ?? ""), String(e)].join(" ");

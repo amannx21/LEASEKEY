@@ -209,11 +209,29 @@ export function Arena() {
                   {" · "}<span className="num">{usesLeft}</span> strikes left · power {item.power}
                 </small>
               )}
+              {session && item && timeLeft > 0 && usesLeft === 0 && (
+                <small className="warn">
+                  This lease's gas budget is used up: every strike was a real NEAR transaction. Return it now to get
+                  the unused time refunded, then rent again to keep fighting with it.
+                </small>
+              )}
             </div>
             {!session && (
               <button className="primary" onClick={() => c.setPage("market")}>Rent a weapon</button>
             )}
-            {session && item && timeLeft > 0 && (
+            {session && item && timeLeft > 0 && usesLeft === 0 && (
+              <button
+                className="primary"
+                disabled={!!c.busy}
+                onClick={async () => {
+                  const s = await c.run("Returning early…", (me) => call<Settlement>(me, item.account_id, "return_early"));
+                  if (s) c.toast("ok", `Returned. Refund ${fmtNear(s.renter_refund, 4)} NEAR for unused time and gas.`);
+                }}
+              >
+                Return it now
+              </button>
+            )}
+            {session && item && timeLeft > 0 && usesLeft > 0 && (
               <button
                 disabled={!!c.busy}
                 title="Add 2 minutes to this lease with the same session key"

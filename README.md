@@ -235,7 +235,7 @@ LeaseKey's difference: the renter acts through a real key with no wallet and no 
 
 **Does an item work in more than one game?** Each game decides. Slime Arena honours LeaseKey Originals and Ember Realms items; any game honours its own. The game reads the item's stats and the lease in one call.
 
-**What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it and returned when the owner retires the item. Renters pay rent plus a refundable 0.05 NEAR gas budget. No collateral.
+**What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it and returned when the owner retires the item. Renters pay rent plus a refundable 0.1 NEAR gas budget, which covers 200 on-chain strikes. No collateral.
 
 **How does LeaseKey make money?** Two fees, both enforced on chain: 2% of every rent at settlement, paid by the item itself, and 0.01 NEAR per item created or wrapped. Owners keep the rest after the game's royalty, games earn that royalty on every lease, and renters pay nothing on top. The developer page has a calculator, and the contract reports its creation-fee earnings through `get_earnings`.
 

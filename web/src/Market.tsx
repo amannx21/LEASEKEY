@@ -304,7 +304,10 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
           {status === "rented" && (
             <div className="rent-box">
               <p>On lease to <AccountLink id={item.renter!} /> for another <Countdown endsAt={item.ends_at} />.</p>
-              {iRent && <button className="primary big wide" onClick={() => c.playWith(item.account_id)}>Fight with it</button>}
+              {iRent && item.uses_left > 0 && <button className="primary big wide" onClick={() => c.playWith(item.account_id)}>Fight with it</button>}
+              {iRent && item.uses_left === 0 && (
+                <p className="warn">You have used every strike this lease's gas budget covers. Return it from the Arena or My Items for a refund of the unused time, then rent it again.</p>
+              )}
             </div>
           )}
           {status === "expired" && (mine || !item.listed || item.durability === 0) && (

@@ -402,3 +402,9 @@ Follow-up, "the grainy text glitches before the clear text shows": the dust lett
 **Answer:** Yes, and the contract already allowed it: `rent` takes any `duration_secs` from 60 seconds up to the item's `max_secs`, and `list` lets the owner change `max_secs`. Only the app was limiting it, to four presets (2 min, 5 min, 30 min, 1 hour) and a fixed two-hour maximum at creation.
 
 **Fix:** the rent panel keeps the presets and adds "Custom": any number of minutes, hours or days, checked against the owner's limit, with the bill naming the exact length. On My Items, owners set "up to … h" next to the price, sent as `max_secs` with the listing. No contract change. Guest accounts on testnet are topped up for ordinary leases only (at most 5 NEAR per top-up), so a multi-day lease of an expensive item asks for your own testnet NEAR.
+
+## 43. "I rented, time is still left, but the gear is gone and fighting again does not bring it back"
+
+**Answer:** every strike is a real `use_item` transaction paid from the lease's gas budget, at a flat 0.0005 NEAR per strike. The budget was 0.05 NEAR, which covers 100 strikes, and fast play used all 100 before the time ran out. With no strikes left the game correctly stops arming the item, but it said nothing, so the gear seemed to vanish, and the Armory still offered "Fight with it".
+
+**Fix:** new leases carry a 0.1 NEAR gas budget, which covers 200 strikes; the unused part is refunded at settlement as before. When the strikes run out early, the Arena says so in plain words and offers "Return it now", which ends the lease and refunds the unused time and gas. The Armory sheet shows the same explanation instead of "Fight with it". The contract is unchanged.
