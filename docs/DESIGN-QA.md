@@ -313,3 +313,15 @@ Verified: an expired Aegis Plate lease closed from the item panel in about 5 sec
 ## 33. The access check's player field looked fixed to my own account
 
 **Fix:** "Player account" is now a list built from the chosen item: you, the current renter (when it is leased), the owner, a stranger, or "Type another account…". Trying each one shows who the game would let use the item.
+
+## 34. The access check's game list was empty
+
+**Fix:** the list was filled by one read of the game registry, and if a public server dropped that read it stayed empty. The list now fills straight away from the games the loaded items already name, and the registry and Slime Arena's rules are retried a few times. The item picker also selects the first item once items load, and copies of the same item are labelled by edition.
+
+## 35. How does it work when a few people hold the same rare item?
+
+**Answer:** every copy is its own edition, minted under the item type's supply cap ("Edition 2 of 5 ever made"), and every edition is its own NEAR account with its own owner. Each owner lists their copy independently, sets their own price, and earns from their own leases. Copies never share a lease, so two players can rent two copies of the same sword at the same time. The game sees the same item type and the same stats for every copy, because stats belong to the type, not to the owner. The cap is what keeps it rare: once all editions exist, no more can be made.
+
+**Gap found:** the item page did not show the other copies, so a renter could not compare them.
+
+**Fix:** the item page now lists "Other copies of this item" with edition, owner, price and status, available copies first, cheapest first. Clicking one opens it.

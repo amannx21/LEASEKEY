@@ -28,6 +28,17 @@ const [deposit, transfer] = await lk.wrapActions(
 const wrapped = await lk.findWrapped("your-game-items.testnet", tokenId);`;
 
 const CUSTOM = "__custom__";
+/** Public RPCs drop the odd request; try a read a few times before giving up. */
+async function retry<T>(read: () => Promise<T>, tries = 4): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await read();
+    } catch (e) {
+      if (i >= tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 1200 * (i + 1)));
+    }
+  }
+}
 const STRANGER = "stranger.testnet";
 
 export function Build() {
@@ -35,6 +46,10 @@ export function Build() {
   const [itemId, setItemId] = useState(c.items[0]?.account_id ?? "");
   const [player, setPlayer] = useState(c.me?.accountId ?? "");
   const [typing, setTyping] = useState(false);
+  // Items load after the page opens: pick the first one once they arrive.
+  useEffect(() => {
+    if (c.items.length && !c.items.some((i) => i.account_id === itemId)) setItemId(c.items[0].account_id);
+  }, [c.items, itemId]);
   // Ready-made players for the chosen item, so it is obvious the check works for anyone.
   const picked = c.items.find((i) => i.account_id === itemId);
   const playerChoices: [string, string][] = [];
@@ -49,15 +64,23 @@ export function Build() {
     if (!typing && !playerChoices.some(([x]) => x === player)) setPlayer(playerChoices[0]?.[0] ?? "");
   }, [itemId, typing, c.me?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
   // The game doing the check, and the list of games it has chosen to accept.
-  const [allGames, setAllGames] = useState<{ account_id: string; name: string }[]>([]);
+  const [chainGames, setChainGames] = useState<{ account_id: string; name: string }[]>([]);
+  // Until the registry answers, list the games the loaded items already name, so the picker is never empty.
+  const allGames = chainGames.length ? chainGames : [
+    ...new Map(c.items.filter((i) => i.game).map((i) => [i.game!, { account_id: i.game!, name: i.game_name || i.game! }])).values(),
+    ...(ARENA_GAME && !c.items.some((i) => i.game === ARENA_GAME) ? [{ account_id: ARENA_GAME, name: "Slime Arena" }] : []),
+  ];
   const [checker, setChecker] = useState(ARENA_GAME);
   const [accepts, setAccepts] = useState<string[]>([]);
   useEffect(() => {
-    view<{ account_id: string; name: string }[]>(FACTORY_ID, "get_games").then(setAllGames, () => {});
+    let live = true;
+    retry(() => view<{ account_id: string; name: string }[]>(FACTORY_ID, "get_games"))
+      .then((g) => live && g?.length && setChainGames(g), () => {});
+    return () => { live = false; };
   }, []);
   useEffect(() => {
     // Slime Arena publishes its accepted list on chain. Any other game accepts only its own items by default.
-    if (checker === ARENA_GAME) view<{ accepted_games: string[] }>(ARENA_GAME, "get_rules").then((r) => setAccepts(r.accepted_games), () => setAccepts([checker]));
+    if (checker === ARENA_GAME) retry(() => view<{ accepted_games: string[] }>(ARENA_GAME, "get_rules")).then((r) => setAccepts(r.accepted_games), () => setAccepts([checker]));
     else setAccepts([checker]);
   }, [checker]);
   const nameOf = (id: string) => allGames.find((g) => g.account_id === id)?.name ?? id;
@@ -122,7 +145,11 @@ export function Build() {
         <div className="checker-grid">
           <label>Item account
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              {c.items.map((i) => <option key={i.account_id} value={i.account_id}>{i.name}</option>)}
+              {c.items.map((i) => (
+                <option key={i.account_id} value={i.account_id}>
+                  {i.name}{i.max_supply && i.max_supply > 1 ? ` · edition ${i.edition} of ${i.max_supply}` : ""}
+                </option>
+              ))}
             </select>
           </label>
           <label>Player account

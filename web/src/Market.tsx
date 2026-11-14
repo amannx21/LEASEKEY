@@ -188,6 +188,14 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
   const options = DURATIONS.filter(([s]) => s <= Number(item.max_secs));
   const [secs, setSecs] = useState(120);
   const cost = (BigInt(item.price_per_hour) * BigInt(secs)) / 3600n;
+  // Other editions of the same capped item type, cheapest available first.
+  const copies = item.item_type
+    ? c.items
+        .filter((o) => o.item_type === item.item_type && o.game === item.game && o.account_id !== item.account_id)
+        .sort((a, b) =>
+          Number(statusOf(b) === "available") - Number(statusOf(a) === "available") ||
+          Number(BigInt(a.price_per_hour) - BigInt(b.price_per_hour)))
+    : [];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -229,6 +237,21 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
             <div><dt>Game</dt><dd>{item.verified ? "✓ " : "Unverified · "}{item.origin ? <>Wrapped from <AccountLink id={item.origin.contract} /></> : item.game_name ?? "Unregistered"}</dd></div>
             {item.origin && <div><dt>Original NFT</dt><dd className="num">#{item.origin.token_id}, held in escrow</dd></div>}
           </dl>
+
+          {copies.length > 0 && (
+            <div className="copies">
+              <h3>Other copies of {item.name}</h3>
+              <p className="fine">Same item and stats from {item.game_name ?? "the same game"}, but each copy has its own owner, price and lease.</p>
+              {copies.map((o) => (
+                <button key={o.account_id} className="copy-row" onClick={() => c.openItem(o.account_id)}>
+                  <span className="num">Edition {o.edition}</span>
+                  <span className="copy-owner">{o.owner === c.me?.accountId ? "yours" : short(o.owner)}</span>
+                  <span className="num">{fmtNear(o.price_per_hour)} NEAR/hr</span>
+                  <StatusBadge item={o} />
+                </button>
+              ))}
+            </div>
+          )}
 
           {status === "available" && !mine && (
             <div className="rent-box">
