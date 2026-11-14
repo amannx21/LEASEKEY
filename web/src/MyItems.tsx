@@ -422,6 +422,9 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
   const [pick, setPick] = useState("");
   const [player, setPlayer] = useState("");
   const [royalty, setRoyalty] = useState(10);
+  // The type's stats are the most any copy can have; a random drop can roll lower.
+  const [stats, setStats] = useState<Record<string, number>>({ attack: 30, defence: 15, speed: 15, endurance: 20 });
+  const [roll, setRoll] = useState(true);
 
   const load = useCallback(
     () => view<ItemType[]>(FACTORY_ID, "get_item_types", { game: me }).then((t) => { setTypes(t); setPick((p) => p || t[0]?.type_id || ""); }, () => setTypes([])),
@@ -431,7 +434,7 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
 
   const define = async () => {
     await c.run(`Defining ${name}…`, (who) =>
-      call(who, FACTORY_ID, "define_item_type", { type_id: name, name, image: `${art}.svg`, power, max_supply: limited ? supply : 0 }, 10n ** 22n));
+      call(who, FACTORY_ID, "define_item_type", { type_id: name, name, image: `${art}.svg`, power, max_supply: limited ? supply : 0, stats: Object.entries(stats).map(([n, v]) => ({ name: n, value: v })) }, 10n ** 22n));
     await load();
   };
 
@@ -446,15 +449,20 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
     c.run(`Minting ${chosen?.name}…`, async (who) => {
       const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
       const owner = player.trim() || me;
+      let rolled: { name: string; value: number }[] | undefined;
+      if (roll) {
+        const ceiling = await view<{ name: string; value: number }[]>(FACTORY_ID, "get_type_stats", { game: me, type_id: pick });
+        if (ceiling.length) rolled = ceiling.map((s) => ({ name: s.name, value: Math.max(1, Math.round(s.value * (0.55 + Math.random() * 0.45))) }));
+      }
       const minted = await call<{ token_id: string; item_account: string; edition: number } | null>(who, FACTORY_ID, "mint", {
         args: {
           item_type: pick, price_per_hour: suggestedPrice(chosen!.power, chosen!.max_supply || chosen!.minted + 1).toString(), max_secs: "7200",
-          royalty_bps: Math.round(royalty * 100), owner,
+          royalty_bps: Math.round(royalty * 100), owner, ...(rolled ? { stats: rolled } : {}),
         },
       }, deposit, 150n * TGAS);
       if (!minted) throw new Error("mint failed, deposit refunded");
       if (owner === me) await call(who, minted.item_account, "list", {});
-      c.toast("ok", `${chosen!.name} copy #${minted.edition}${chosen!.max_supply ? ` of ${chosen!.max_supply}` : ""} minted to ${owner}, with its own ID and account.`);
+      c.toast("ok", `${chosen!.name} copy #${minted.edition}${chosen!.max_supply ? ` of ${chosen!.max_supply}` : ""} minted to ${owner}, with its own ID and account${rolled ? `. Rolled ${rolled.map((s) => `${s.name} ${s.value}`).join(", ")}` : ""}.`);
       await load();
     });
 
@@ -477,6 +485,12 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
           ))}
         </div>
         <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
+        <label>Stats: the most any copy can have</label>
+        <div className="stat-pick">
+          {Object.entries(stats).map(([k, v]) => (
+            <label key={k}>{k} {v}<input type="range" min={0} max={100} value={v} onChange={(e) => setStats({ ...stats, [k]: Number(e.target.value) })} /></label>
+          ))}
+        </div>
         <label className="check"><input type="checkbox" checked={limited} onChange={(e) => setLimited(e.target.checked)} /> Limited edition: fix how many can ever exist</label>
         {limited ? (
           <label>Only {supply} will ever exist<input type="range" min={1} max={50} value={supply} onChange={(e) => setSupply(Number(e.target.value))} /></label>
@@ -502,6 +516,7 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
         {chosen && (
           <>
             <label>Give it to player (account ID, blank for yourself)<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
+            <label className="check"><input type="checkbox" checked={roll} onChange={(e) => setRoll(e.target.checked)} /> Random drop: roll this copy's stats, never above the type's</label>
             <label>Your royalty on every rental: {royalty}%<input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} /></label>
             <button className="primary" disabled={!!c.busy || full(chosen)} onClick={mint}>
               {full(chosen) ? "Sold out: the cap is reached"

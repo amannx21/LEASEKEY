@@ -206,7 +206,15 @@ export async function landed(check: () => Promise<boolean>, tries = 5): Promise<
 }
 
 export async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
-  return (await limited(() => provider.callFunction(contractId, method, args))) as T;
+  // A read changes nothing, so when every public server is busy it is always safe to ask again.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return (await limited(() => provider.callFunction(contractId, method, args))) as T;
+    } catch (e) {
+      if (attempt >= 3 || !isRateLimited(e)) throw e;
+      await sleep(800 * (attempt + 1));
+    }
+  }
 }
 
 /** Local clock minus chain clock, so countdowns follow block time. */
@@ -453,6 +461,33 @@ export function newSessionKey(itemId: string): KeyPair {
   // Saved before the rent transaction so a wallet redirect cannot lose it.
   localStorage.setItem(sessionStorageKey(itemId), keyPair.toString());
   return keyPair;
+}
+
+/**
+ * A link that moves this lease's play key to another device. The key travels in the URL fragment,
+ * which browsers never send to any server, and it can only call use_item on this one item until the
+ * lease ends, so the worst a leaked link can do is play the rest of this lease.
+ */
+export function playLink(item: ItemView): string | null {
+  const saved = localStorage.getItem(sessionStorageKey(item.account_id));
+  if (!saved) return null;
+  return `${location.origin}${location.pathname}#play=${encodeURIComponent(item.account_id)}&key=${encodeURIComponent(saved)}`;
+}
+
+/** Reads a play link once: stores its key for that item and cleans the address bar. Returns the item. */
+export function importPlayLink(): string | null {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const id = h.get("play");
+  const key = h.get("key");
+  if (!id || !key) return null;
+  try {
+    KeyPair.fromString(key as any);
+    localStorage.setItem(sessionStorageKey(id), key);
+  } catch {
+    return null;
+  }
+  history.replaceState(null, "", `${location.pathname}#arena`);
+  return id;
 }
 
 /** The stored session key, but only if the chain says it is this item's current renter key. */

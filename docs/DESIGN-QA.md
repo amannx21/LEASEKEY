@@ -337,3 +337,21 @@ Verified: an expired Aegis Plate lease closed from the item panel in about 5 sec
 - Common loot does not need to go on chain at all. Creating a copy costs about 0.16 NEAR of storage, so a game mints a drop when its player wants to rent it out; everything else stays in the game's own inventory.
 
 Test: `open_supply_for_random_drops_then_seal_it`. Live on testnet: the factory reports `minted` for every item.
+
+## 37. Judge review: questions a judge is likely to ask, and the gaps they exposed
+
+Every question above came from trying the product. Read the same way a judge would, they point to a few more, and three of them exposed real gaps.
+
+**"A lease expired and nobody closed it. Can I rent the item?"** It used to show only "Close lease", so the next renter had to settle a stranger's lease first. **Fix:** an expired item now shows "Rent it"; renting closes the old lease (paying its owner and game) and starts the new one in the same click. "Available now" includes these items. Verified on testnet with the Frost Bow, twice.
+
+**"I paid for a lease, then switched phones or cleared my browser."** The play key lives in the browser, so the lease was stuck on one device. **Fix:** "Play on another device" in the Arena copies a link that carries only that lease's play key, in the URL fragment, which browsers never send to a server. Opening it stores the key and opens the Arena with the item. A leaked link can at most play out the rest of that lease. Without the link, the renter's own account can still return the item early for a refund. Verified: a tab with the key deleted got it back from the link.
+
+**"Real drops have random stats. Are all copies of an item identical?"** They were. **Fix:** `mint` takes an optional roll for that copy. Each rolled stat must be a stat of the type and no higher than the type's value, so the type is the ceiling and no copy can be stronger than the item it is. The Studio has "Random drop: roll this copy's stats". Test: `drops_roll_their_own_stats_but_never_above_the_type`. Live on testnet.
+
+Also hardened: every read now retries a few times when all public servers are busy, since a read changes nothing.
+
+Questions with existing answers, now also in the README's "Questions you might ask": what the NFT does, fakes, common items, several owners of one item, renter keeping the item, owner pulling it, who settles, cross-game use, cost per item, and how LeaseKey makes money (it does not yet; a settlement fee is on the roadmap).
+
+**Not fixed, on purpose:**
+- Items run immutable code referenced by hash, so lease rules for existing items can never change under an owner or renter. The flip side is that item-level features (for example renter-side key rotation in the contract) only reach new items; the device link covers that need without a contract change.
+- Retiring an item to recover its ~0.16 NEAR of storage is not built. Items are meant to live on.

@@ -430,3 +430,44 @@ async fn open_supply_for_random_drops_then_seal_it() -> anyhow::Result<()> {
     assert_eq!(first["minted"], 3);
     Ok(())
 }
+
+#[tokio::test]
+async fn drops_roll_their_own_stats_but_never_above_the_type() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let f = factory(&worker).await?;
+    let game = worker.dev_create_account().await?;
+    let dep = mint_deposit(&f).await?;
+    game.call(f.id(), "register_game").args_json(json!({ "name": "Loot Game" }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+    define(&game, f.id(), "orc-blade", 30, 0).await?;
+    game.call(f.id(), "set_type_stats")
+        .args_json(json!({ "type_id": "orc-blade", "stats": [{ "name": "attack", "value": 50 }, { "name": "speed", "value": 20 }] }))
+        .transact().await?.into_result()?;
+
+    // One drop rolls a weaker attack; speed is left out and keeps the type's value.
+    let mut args = item_args("orc-blade", None);
+    args["args"]["stats"] = json!([{ "name": "Attack", "value": 37 }]);
+    let rolled: Value = game.call(f.id(), "mint").args_json(args).deposit(dep).max_gas().transact().await?.json()?;
+    assert_eq!(rolled["stats"], json!([{ "name": "attack", "value": 37 }, { "name": "speed", "value": 20 }]));
+
+    // A drop without a roll gets the type's stats.
+    let plain: Value = game.call(f.id(), "mint").args_json(item_args("orc-blade", None)).deposit(dep).max_gas().transact().await?.json()?;
+    assert_eq!(plain["stats"][0]["value"], 50);
+
+    // No copy can be stronger than its type, or invent a stat.
+    let mut over = item_args("orc-blade", None);
+    over["args"]["stats"] = json!([{ "name": "attack", "value": 51 }]);
+    let r = game.call(f.id(), "mint").args_json(over).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("above the type"));
+    let mut invented = item_args("orc-blade", None);
+    invented["args"]["stats"] = json!([{ "name": "luck", "value": 5 }]);
+    let r = game.call(f.id(), "mint").args_json(invented).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+
+    // The rolled copy keeps its own stats in listings too.
+    let items: Vec<Value> = f.view("get_items").args_json(json!({ "limit": 10 })).await?.json()?;
+    let first = items.iter().find(|i| i["edition"] == 1).unwrap();
+    assert_eq!(first["stats"][0]["value"], 37);
+    Ok(())
+}

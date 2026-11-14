@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  FACTORY_ID, GAS_BUDGET, call, landed, view, txInFlight, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
+  FACTORY_ID, GAS_BUDGET, call, chainNow, importPlayLink, landed, view, txInFlight, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
   newSessionKey, openWalletModal, getSelector, walletIdentity, errorText,
   type Identity, type ItemView, type Settlement,
 } from "./near";
@@ -8,6 +8,9 @@ import {
 export type Toast = { id: number; kind: "ok" | "err" | "info"; text: string };
 export type Page = "home" | "market" | "mine" | "arena" | "build";
 const PAGES: Page[] = ["home", "market", "mine", "arena", "build"];
+// A play link from another device carries a lease's play key; take it before routing reads the hash.
+const playedFromLink = importPlayLink();
+
 const pageFromHash = (): Page => {
   if (new URLSearchParams(window.location.search).get("item")) return "market";
   const h = window.location.hash.slice(1) as Page;
@@ -69,7 +72,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
     },
     [setPage],
   );
-  const [arenaItem, setArenaItem] = useState<string | null>(null);
+  const [arenaItem, setArenaItem] = useState<string | null>(playedFromLink);
   const meRef = useRef(me);
   meRef.current = me;
 
@@ -167,6 +170,16 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   const rent = useCallback(
     async (item: ItemView, secs: number) => {
       const ok = await run(`Renting ${item.name}…`, async (who) => {
+        // The last lease ended but nobody closed it yet: close it first (that pays its owner and game),
+        // so the next renter never has to do it by hand.
+        if (item.renter && item.ends_at && Number(item.ends_at) <= chainNow()) {
+          try {
+            await call(who, item.account_id, "end_rental");
+          } catch (e) {
+            const closed = () => view<ItemView>(item.account_id, "get_item").then((i) => !i.renter);
+            if (!(await landed(closed))) throw e;
+          }
+        }
         const sessionKey = newSessionKey(item.account_id);
         const cost = (BigInt(item.price_per_hour) * BigInt(secs)) / 3600n;
         try {

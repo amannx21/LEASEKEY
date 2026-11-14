@@ -271,7 +271,8 @@ export class LeaseKey {
 
   async mintAndList(
     game: Account,
-    item: { itemType: string; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; owner?: string },
+    /** stats: optional roll for this copy (a random drop); each value must be at most the type's. */
+    item: { itemType: string; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; owner?: string; stats?: { name: string; value: number }[] },
   ): Promise<{ token_id: string; item_account: string }> {
     const deposit = BigInt(await this.view<string>(this.factoryId, "mint_deposit"));
     const minted = parseOutcome<{ token_id: string; item_account: string } | null>(
@@ -281,6 +282,7 @@ export class LeaseKey {
         args: { args: {
           item_type: item.itemType, price_per_hour: item.pricePerHour.toString(),
           max_secs: String(item.maxSecs ?? 7200), royalty_bps: item.royaltyBps ?? 1000, owner: item.owner ?? null,
+          ...(item.stats ? { stats: item.stats } : {}),
         } },
         deposit,
         gas: 150n * TGAS,

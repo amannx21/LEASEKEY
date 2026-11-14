@@ -45,7 +45,7 @@ The owner keeps the item. The renter gets a key that can only use it, for exactl
 2. **Renting never moves the item.** The item's account adds a key for the renter that can call one thing, `use_item`. Transfers, sales and withdrawals are rejected by the NEAR protocol itself.
 3. **Time is enforced on chain.** When the lease ends the key stops working, anyone can close the lease, and the rent splits between the owner and the game automatically.
 4. **Play feels normal.** The key lives on the player's device and the item pays its own gas, so there's no wallet pop-up on any action.
-5. **Rare stays rare.** Only games create items, from types they define once with fixed stats and a hard cap on how many can exist. Nobody can mint a copy or a stronger version.
+5. **Rare stays rare.** Only games create items, from types they define once with fixed stats. Every copy is its own token and account with its own owner. A game mints copies as they drop, optionally under a hard cap, and a drop can roll its stats but never above its type. Nobody can mint a fake or a stronger version.
 
 ```mermaid
 sequenceDiagram
@@ -83,7 +83,7 @@ sequenceDiagram
 
 | | Can | Can never |
 |---|---|---|
-| **Game** | Define its items and their stats once, mint them to players, earn on every lease, choose which games' items it honours | Make more than the cap, mint a stronger copy, change an item type |
+| **Game** | Define its items and their stats once, mint copies to players as they drop (optionally capped, sealable), roll a drop's stats, earn on every lease, choose which games' items it honours | Exceed a cap, reopen a sealed type, roll a copy above its type, change an item type |
 | **Owner** | Receive items from games, bring items they already own, set a price, earn rent | Cancel, revoke or take back an item mid-lease |
 | **Renter** | Use the item, return early for a refund, extend | Transfer, sell or withdraw it, or keep using it after time is up |
 
@@ -140,7 +140,7 @@ This rents an item for 60 seconds with a fresh throwaway account, strikes three 
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
-cd tests && cargo test         # 17 sandbox integration tests
+cd tests && cargo test         # 19 sandbox integration tests
 cd .. && cargo test            # unit tests for the rent, refund and split math
 ```
 
@@ -203,6 +203,39 @@ if (access.ok) equip(itemId, access.power, access.endsAt);
 
 LeaseKey's difference: the renter acts through a real key with no wallet and no gas, the owner can never end a lease early, the item escrows and pays out its own rent, and scarcity and game identity are built into the protocol. Like every approach above, a game still has to check the lease for it to matter.
 
+## Questions you might ask
+
+<details>
+<summary><b>Twelve questions, short answers</b></summary>
+
+<br>
+
+**What does the NFT actually do here?** It is the ownership record. The item itself is a NEAR account that holds the rent, runs the lease and pays out. Whoever owns the NFT owns the account's earnings.
+
+**Can anyone mint a fake "legendary sword"?** No. Only registered games mint, only from item types they defined. Every item records the game that made it, and a game honours only the games it chooses. A copycat's sword is labelled with the copycat's game forever.
+
+**A game has thousands of the same common sword. Does it have to say how many?** No. A type can have no fixed count: the game mints a copy each time one drops, and every copy shows how many exist so far. A cap is optional, and a game can seal the count later. Common loot usually stays in the game's own inventory; it is minted when its player wants to rent it out.
+
+**Are all copies of a drop identical?** Only if the game wants that. A drop can roll its own stats, never above its type's.
+
+**Several people own the same rare item. How do renters choose?** Each copy has its own owner, price and lease. The item page lists the other copies, available and cheapest first.
+
+**What stops the renter from keeping the item?** The renter never holds it. They get a key that can only call `use_item` on that one account, and the item refuses it after expiry.
+
+**What stops the owner from pulling the item mid-lease?** The item contract has no way to unlist, reprice, revoke or unwrap during a lease. Paid time is the renter's.
+
+**Who pays the owner when time is up?** Anyone can close a finished lease. The arena does it for its players, a keeper script does it on a schedule, and the next renter's rent closes it automatically.
+
+**I lost my browser data mid-lease.** "Play on another device" moves a lease with a link. Without it, the renter's own account can return the item early and get the unused time back.
+
+**Does an item work in more than one game?** Each game decides. Slime Arena honours LeaseKey Originals and Ember Realms items; any game honours its own. The game reads the item's stats and the lease in one call.
+
+**What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it. Renters pay rent plus a refundable 0.05 NEAR gas budget. No collateral.
+
+**How does LeaseKey make money?** Today it doesn't; owners and games keep everything. A small settlement fee is on the roadmap.
+
+</details>
+
 ## Under the hood
 
 <details>
@@ -233,7 +266,10 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 | Gameplay with no wallet pop-ups | demo step 4: the on-chain feed shows one transaction per strike |
 | 12 items with eight distinct attack styles | Armory page, then fight in the Arena |
 | Only registered games can mint; items record their game | test `only_registered_games_mint_and_items_record_their_game`; My Items, Game studio |
-| Hard supply caps per item type, power fixed by the type, editions like "2 of 5", types can never change | test `supply_caps_fixed_power_and_verified_games`; Armory cards |
+| Item types fixed forever; copies numbered "2 of 5" under a cap, or "Copy #7 · 12 exist so far" for open drops that a game can seal | tests `supply_caps_fixed_power_and_verified_games`, `open_supply_for_random_drops_then_seal_it`; Armory cards |
+| Random drops roll their own stats, never above the type's | test `drops_roll_their_own_stats_but_never_above_the_type`; Studio in My Items |
+| Renting an item whose last lease expired closes that lease first, in the same click | Armory: an expired item shows "Rent it" |
+| Move a lease to another device | Arena: "Play on another device" copies a link that carries only that lease's play key |
 | Game-defined stats (attack, defence, speed, endurance…), fixed once set, used by the Arena | same test; Armory cards and item panel; Arena |
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
@@ -281,11 +317,11 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 |---|---|---|
 | **Renter's key** | Call `use_item` on its one item, until expiry or until its gas budget runs out | Call any other method or contract, move NEAR, or exceed its gas allowance. The NEAR protocol rejects these. |
 | **Owner during a lease** | Transfer the item; the lease continues and rent goes to whoever owns it at the end | Unlist, reprice, end the lease, revoke the key or unwrap. The item contract has no path for it. |
-| **Game** | Define types and mint up to the cap | Exceed a cap or change a type. The contract refuses. |
+| **Game** | Define types, mint copies (up to the cap if it set one), seal an open type, roll a drop's stats | Exceed a cap, reopen a sealed type, roll above the type, or change a type. The contract refuses. |
 
 - The factory account still has a full-access key held by the deployer, and was used once to upgrade the factory in place. A malicious deployer could upgrade it again and reassign item owners or release escrowed NFTs. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
 - After expiry the key stays on the account until someone calls `end_rental`. The contract rejects it in the meantime. The keeper and the game client both call `end_rental`.
-- The session key is stored in the browser's `localStorage`. It can only play, so a leak costs at most the remaining gas budget.
+- The session key is stored in the browser's `localStorage`. It can only play, so a leak costs at most the remaining gas budget. "Play on another device" moves it with a link that keeps the key in the URL fragment, which is never sent to a server. If it is lost, the renter's own account can still return the item early for a refund of the unused time.
 - The shortest rental is 60 seconds, the longest is set per item, 2 hours for the demo items.
 - Guest mode uses the public testnet faucet, which is rate limited per address. As a fallback, `web/src/deployment.json` contains the key of a small testnet-only guest bank account that creates guest accounts. That key is public on purpose, holds only a few testnet NEAR, and anyone could drain it. `npm run bank -- 5` refills it from the factory.
 - Public testnet RPC endpoints are rate limited. Set `VITE_RPC_URL` or `NEAR_RPC_URL` to use your own.

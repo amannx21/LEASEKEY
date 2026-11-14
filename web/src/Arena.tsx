@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LOOKS, artUrl, lookOf, type AttackStyle, type Look } from "./catalog";
 import {
-  ARENA_GAME, EXPLORER, FACTORY_ID, Session, TGAS, call, errorText, fmtNear, sessionKeyFor, statOf, usableInArena, view,
+  ARENA_GAME, EXPLORER, FACTORY_ID, Session, TGAS, call, errorText, fmtNear, playLink, sessionKeyFor, statOf, usableInArena, view,
   type ItemRef, type Settlement,
 } from "./near";
 import { useChain } from "./store";
@@ -205,6 +205,24 @@ export function Arena() {
                       (BigInt(item.price_per_hour) * 120n) / 3600n + 1n))}
               >
                 +2 min
+              </button>
+            )}
+            {session && item && timeLeft > 0 && (
+              <button
+                className="ghost small"
+                title="Copy a link that moves this lease to your phone or another computer"
+                onClick={async () => {
+                  const link = playLink(item);
+                  if (!link) return;
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    c.toast("ok", "Play link copied. Open it on your other device to keep playing this lease. It only works for this item, until the lease ends.");
+                  } catch {
+                    c.toast("err", "Could not copy the link here. Try again from a regular browser tab.");
+                  }
+                }}
+              >
+                Play on another device
               </button>
             )}
           </div>

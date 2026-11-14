@@ -145,6 +145,9 @@ pub struct MintArgs {
     /// Admin only: mint on behalf of a registered game.
     pub creator: Option<AccountId>,
     pub max_durability: Option<u32>,
+    /// Optional stats rolled for this copy, e.g. a random drop. Each must be a stat of the
+    /// type and no higher than the type's value; stats left out keep the type's value.
+    pub stats: Option<Vec<Stat>>,
 }
 
 /// `msg` of `nft_transfer_call` when wrapping an NFT.
@@ -242,6 +245,10 @@ fn stats_map() -> RawMap<String, Vec<Stat>> {
 }
 fn wrap_stats_map() -> RawMap<TokenId, Vec<Stat>> {
     RawMap::new(b"ws".to_vec())
+}
+/// Stats rolled for one copy at mint, capped by its type.
+fn rolls_map() -> RawMap<TokenId, Vec<Stat>> {
+    RawMap::new(b"rl".to_vec())
 }
 /// At most 8 stats, short names, values up to 10000, no duplicates.
 fn checked_stats(stats: Vec<Stat>) -> Vec<Stat> {
@@ -560,6 +567,23 @@ impl LeaseKey {
             max_durability: args.max_durability.unwrap_or(1000),
             description: "A LeaseKey item that rents itself out.".to_string(),
         };
+        // A random drop can roll its own stats, but never above what the type allows:
+        // the type's stats are the ceiling, so no copy can be stronger than the item it is.
+        if let Some(rolled) = args.stats {
+            let ceiling = stats_map().get(&key).unwrap_or_else(|| env::panic_str("this type has no stats to roll"));
+            let rolled = checked_stats(rolled);
+            for r in &rolled {
+                let max = ceiling.iter().find(|c| c.name == r.name)
+                    .unwrap_or_else(|| env::panic_str(&format!("{} is not a stat of this item type", r.name)));
+                require!(r.value <= max.value, format!("{} roll {} is above the type's {}", r.name, r.value, max.value));
+            }
+            let copy: Vec<Stat> = ceiling.iter()
+                .map(|c| rolled.iter().find(|r| r.name == c.name).cloned().unwrap_or_else(|| c.clone()))
+                .collect();
+            // the token id create_item is about to use
+            let token_id = format!("{}-{}", slug(&item.name), self.next_id);
+            rolls_map().insert(&token_id, &copy);
+        }
         self.create_item(item, deposit, deposit, None, None)
     }
 
@@ -777,7 +801,7 @@ impl LeaseKey {
         let max_supply = item_type.as_ref().map(|t| t.max_supply).filter(|&m| m > 0);
         let minted = item_type.as_ref().map(|t| t.minted);
         let stats = match (&game, &edition) {
-            (Some(g), Some(e)) => stats_map().get(&type_key(g, &e.item_type)).unwrap_or_default(),
+            (Some(g), Some(e)) => rolls_map().get(&token_id).or_else(|| stats_map().get(&type_key(g, &e.item_type))).unwrap_or_default(),
             _ => wrap_stats_map().get(&token_id).unwrap_or_default(),
         };
         ItemRef {

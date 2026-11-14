@@ -39,7 +39,7 @@ export function Market() {
     const list = visible.filter(
       (i) =>
         (cls === "All" || lookOf(i.image).cls === cls) &&
-        (!onlyFree || statusOf(i) === "available") &&
+        (!onlyFree || statusOf(i) === "available" || (statusOf(i) === "expired" && i.listed && i.durability > 0)) &&
         (!onlyMine || i.owner === me || i.renter === me) &&
         (!term || i.name.toLowerCase().includes(term) || lookOf(i.image).homage.includes(term)),
     );
@@ -253,9 +253,10 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
             </div>
           )}
 
-          {status === "available" && !mine && (
+          {(status === "available" || (status === "expired" && item.listed && item.durability > 0)) && !mine && (
             <div className="rent-box">
               <h3>Rent it</h3>
+              {status === "expired" && <p className="fine">The last lease has ended. Renting closes it first, which pays its owner and game, all in one go.</p>}
               <div className="seg" role="radiogroup" aria-label="Lease length">
                 {options.map(([s, label]) => (
                   <button key={s} role="radio" aria-checked={s === secs} className={s === secs ? "on" : ""} onClick={() => setSecs(s)}>{label}</button>
@@ -283,7 +284,7 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
               {iRent && <button className="primary big wide" onClick={() => c.playWith(item.account_id)}>Fight with it</button>}
             </div>
           )}
-          {status === "expired" && (
+          {status === "expired" && (mine || !item.listed || item.durability === 0) && (
             <div className="rent-box">
               <p>Time is up. Close the lease to pay the owner and the game, refund the renter's unused gas budget, and free the item for the next renter. Anyone can do this.</p>
               <button className="primary wide" onClick={() => c.endRental(item)} disabled={!!c.busy}>Close lease and pay out</button>
