@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  FACTORY_ID, GAS_BUDGET, call, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
+  FACTORY_ID, GAS_BUDGET, call, txInFlight, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
   newSessionKey, openWalletModal, getSelector, walletIdentity, errorText,
   type Identity, type ItemView, type Settlement,
 } from "./near";
@@ -81,6 +81,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (document.hidden) return; // do not spend RPC quota in a background tab
+    if (txInFlight > 0) return; // leave the quota to the transaction being sent
     try {
       setItems(await loadItems());
       const who = meRef.current;
@@ -94,7 +95,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 8000);
+    const t = setInterval(refresh, 15000); // each refresh reads every item, so keep it gentle on public RPCs
     return () => clearInterval(t);
   }, [refresh]);
 

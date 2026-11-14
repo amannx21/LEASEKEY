@@ -119,7 +119,7 @@ function OwnedRow({ item }: { item: ItemView }) {
       </div>
       <div className="row-actions">
         {status === "expired" && (
-          <button className="primary" onClick={() => c.endRental(item)} disabled={!!c.busy}>Settle and get paid</button>
+          <button className="primary" onClick={() => c.endRental(item)} disabled={!!c.busy}>Close lease and get paid</button>
         )}
         {(status === "available" || status === "unlisted") && (
           <>
@@ -220,7 +220,7 @@ function RentedRow({ item }: { item: ItemView }) {
             Return early
           </button>
         )}
-        {status === "expired" && <button onClick={() => c.endRental(item)} disabled={!!c.busy}>Settle lease</button>}
+        {status === "expired" && <button onClick={() => c.endRental(item)} disabled={!!c.busy}>Close lease and get my refund</button>}
       </div>
     </div>
   );

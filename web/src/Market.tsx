@@ -262,8 +262,8 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
           )}
           {status === "expired" && (
             <div className="rent-box">
-              <p>The lease has ended. Anyone can settle it, which pays the owner and frees the item.</p>
-              <button className="primary wide" onClick={() => c.endRental(item)} disabled={!!c.busy}>Settle the lease</button>
+              <p>Time is up. Close the lease to pay the owner and the game, refund the renter's unused gas budget, and free the item for the next renter. Anyone can do this.</p>
+              <button className="primary wide" onClick={() => c.endRental(item)} disabled={!!c.busy}>Close lease and pay out</button>
             </div>
           )}
           {status === "available" && mine && <p className="muted">You own this item. Manage it under My Items.</p>}

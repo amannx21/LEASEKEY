@@ -14,6 +14,7 @@ export const RPC_URLS: string[] = [
   ...(env.VITE_RPC_URL ? [env.VITE_RPC_URL as string] : []),
   "https://test.rpc.fastnear.com",
   "https://near-testnet.drpc.org",
+  "https://rpc.testnet.fastnear.com",
 ];
 export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const EXPLORER = "https://testnet.nearblocks.io";
@@ -37,9 +38,40 @@ export const TGAS = 10n ** 12n;
 /** Refundable budget that pays the gas of the renter's game actions. */
 export const GAS_BUDGET = NEAR / 20n; // 0.05 NEAR = 100 attacks
 
+const errText = (e: unknown) =>
+  [(e as any)?.name, (e as any)?.type, (e as any)?.message, String((e as any)?.cause ?? ""), String(e)].join(" ");
+
+/** True when a server could not be reached or refused for load, so the request never reached the chain. */
+const isNetworkError = (e: unknown) =>
+  /Failed to fetch|fetch failed|NetworkError|Load failed|RetriesExceeded|timed? ?out|ECONN|Rate limits? exceeded|\b429\b|Too Many Requests|\b50[234]\b|Bad Gateway|Service Unavailable/i
+    .test(errText(e));
+
 export const provider = new providers.FailoverRpcProvider(
-  RPC_URLS.map((url) => new providers.JsonRpcProvider({ url }, { retries: 4, backoff: 1.7, wait: 700 })),
+  RPC_URLS.map((url) => new providers.JsonRpcProvider({ url }, { retries: 2, backoff: 1.5, wait: 500 })),
 );
+// The stock failover treats every error as a dead server, so a real answer from the chain
+// ("not enough balance", a contract panic) came back as "Exceeded N providers". Only network
+// trouble moves on to the next server; anything the chain itself said is passed through as is.
+(provider as any).withBackoff = async function (this: any, getResult: (p: unknown) => Promise<unknown>) {
+  let last: unknown;
+  for (let i = 0; i < this.providers.length; i++) {
+    try {
+      const result = await getResult(this.currentProvider);
+      if (result !== undefined) return result;
+    } catch (e) {
+      if (!isNetworkError(e)) throw e;
+      last = e;
+    }
+    this.switchToNextProvider();
+  }
+  throw last ?? new Error("No NEAR testnet server answered");
+};
+
+/** True when every server refused or was unreachable, so nothing reached the chain and a retry is safe. */
+export const isRateLimited = (e: unknown) => /Exceeded \d+ providers|No NEAR testnet server answered/i.test(errText(e)) || isNetworkError(e);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Transactions in flight. Background refreshes wait while one is being sent. */
+export let txInFlight = 0;
 
 export type ItemView = {
   token_id: string;
@@ -125,8 +157,26 @@ export function parseNear(s: string): bigint {
 
 export const short = (id: string) => (id.length > 26 ? `${id.slice(0, 12)}…${id.slice(-10)}` : id);
 
+/**
+ * Public RPCs drop bursts of parallel requests from one browser ("Failed to fetch", then
+ * "Exceeded N providers"). Reads queue here so at most a few are in flight at a time.
+ */
+const MAX_READS = 4;
+let readsInFlight = 0;
+const readQueue: (() => void)[] = [];
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (readsInFlight >= MAX_READS) await new Promise<void>((r) => readQueue.push(r));
+  readsInFlight += 1;
+  try {
+    return await fn();
+  } finally {
+    readsInFlight -= 1;
+    readQueue.shift()?.();
+  }
+}
+
 export async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
-  return (await provider.callFunction(contractId, method, args)) as T;
+  return (await limited(() => provider.callFunction(contractId, method, args))) as T;
 }
 
 /** Local clock minus chain clock, so countdowns follow block time. */
@@ -194,6 +244,11 @@ export function errorText(e: unknown): string {
   ].filter(Boolean).join(" ");
   const panic = raw.match(/Smart contract panicked: ([^"\\]+)/);
   if (panic) return panic[1];
+  if (/^Not enough NEAR/.test(anyE?.message ?? "")) return anyE.message;
+  if (/does not have enough balance|NotEnoughBalance|LackBalanceForState/i.test(raw))
+    return "Not enough NEAR in this account for that. Nothing was charged. Pick a shorter time or add testnet NEAR.";
+  if (isRateLimited(e) || /Exceeded \d+ providers/i.test(raw))
+    return "The NEAR testnet servers are busy right now. Nothing was charged. Try again in a few seconds.";
   if (/MethodNameMismatch|isn.t allowed by the access key/i.test(raw))
     return "this access key may only call use_item";
   if (/ReceiverMismatch|InvalidAccessKey|receiver/i.test(raw))
@@ -289,7 +344,35 @@ export async function openWalletModal() {
 }
 
 export async function getBalance(accountId: string): Promise<bigint> {
-  return BigInt((await provider.viewAccount(accountId)).amount);
+  return BigInt((await limited(() => provider.viewAccount(accountId))).amount);
+}
+
+/**
+ * The chain reserves gas up front at a pessimistic price (about 0.1 NEAR for 100 TGas on testnet)
+ * and refunds what is unused, so the balance must cover that reserve on top of the deposit.
+ */
+const PREPAID_PER_GAS = 10n ** 9n; // yoctoNEAR
+const STORAGE_ROOM = NEAR / 100n; // 0.01 NEAR
+
+/**
+ * Checks the caller can pay `deposit` plus fees before anything is sent.
+ * Guests were funded by the guest bank (0.5 NEAR), so the same bank refills them when a lease would not fit.
+ * Wallet users get a plain message instead of a raw chain error.
+ */
+export async function ensureFunds(who: Identity, deposit: bigint, gas: bigint): Promise<void> {
+  const need = deposit + gas * PREPAID_PER_GAS + STORAGE_ROOM;
+  const have = await getBalance(who.accountId).catch(() => null);
+  if (have === null || have >= need) return;
+  const bank = (deployment as any).guestBank as { accountId: string; secretKey: string } | undefined;
+  if (who.kind === "guest" && bank) {
+    const banker = new Account(bank.accountId, provider, KeyPairSigner.fromSecretKey(bank.secretKey as any));
+    await banker.transfer({ receiverId: who.accountId, amount: need - have + NEAR / 2n });
+    return;
+  }
+  throw new Error(
+    `Not enough NEAR: this needs about ${fmtNear(need, 3)} NEAR and the account has ${fmtNear(have, 3)}. ` +
+      "Pick a shorter time or add testnet NEAR from the faucet.",
+  );
 }
 
 /** Sends one function call as the connected identity and returns the parsed result. */
@@ -301,11 +384,25 @@ export async function call<T = unknown>(
   deposit = 0n,
   gas = 100n * TGAS,
 ): Promise<T> {
+  if (deposit > 0n) await ensureFunds(who, deposit, gas);
   if (who.kind === "guest") {
-    const outcome = await who.account.callFunctionRaw({
-      contractId, methodName, args, deposit, gas, waitUntil: "EXECUTED_OPTIMISTIC",
-    });
-    return parseOutcome<T>(outcome);
+    txInFlight += 1;
+    try {
+      // A rate-limited request never reached the chain, so it is safe to try again after a pause.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const outcome = await who.account.callFunctionRaw({
+            contractId, methodName, args, deposit, gas, waitUntil: "EXECUTED_OPTIMISTIC",
+          });
+          return parseOutcome<T>(outcome);
+        } catch (e) {
+          if (attempt >= 3 || !isRateLimited(e)) throw e;
+          await sleep(1500 * (attempt + 1));
+        }
+      }
+    } finally {
+      txInFlight -= 1;
+    }
   }
   const outcome = await who.wallet.signAndSendTransaction({
     receiverId: contractId,
@@ -392,6 +489,10 @@ export class Session {
     } catch (e) {
       this.blockHash = null; // resync nonce and block hash before the next send
       // Rapid strikes can reach the network out of order. Resync and try that strike again.
+      if (attempt < 2 && isRateLimited(e)) {
+        await sleep(1000 * (attempt + 1));
+        return this.send<T>(methodName, args, receiverId, deposit, attempt + 1);
+      }
       if (attempt < 2 && /nonce/i.test(String((e as any)?.type) + String((e as any)?.message))) {
         return this.send<T>(methodName, args, receiverId, deposit, attempt + 1);
       }

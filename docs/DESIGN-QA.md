@@ -279,3 +279,21 @@ Test: `wrap_any_nft_rent_it_then_unwrap_it`. Verified on testnet: an "Abyssal Tr
 ## 28. The "Games your game accepts" field was confusing
 
 **Fix:** the developer page's access check now has a "Game doing the check" dropdown with game names. Under it, the page states which games that game accepts. Slime Arena's list is read from its contract; any other game accepts only its own items.
+
+## 29. Renting failed with "Exceeded 2 providers to execute request"
+
+**Answer:** that message hid the real cause. The NEAR client's failover treats every error as a dead server, so when the chain answered "this account does not have enough balance", it tried the next server, got the same answer, and reported "Exceeded N providers". The guest that hit it had been funded with 0.5 NEAR by the guest bank and had spent down to 0.10 NEAR. A lease needs the rent, the 0.05 NEAR refundable gas budget, and about 0.1 NEAR of gas reserved up front (mostly refunded), so it did not fit. Loading every item's details at once also made public servers drop requests, which produced genuine "busy" failures on top.
+
+**Fix:**
+- Failover now moves to the next server only on network trouble. A real answer from the chain (low balance, a contract panic) is shown as is.
+- Before any paid action the app checks the balance against deposit plus the gas reserve. Guests are refilled from the same guest bank that created them; wallet users get a plain "this needs about X NEAR" message.
+- Reads are queued so at most four are in flight, and background refresh pauses while a transaction is being sent and runs every 15 seconds instead of 8.
+- The deprecated `rpc.testnet.near.org` (always 429) was replaced by `rpc.testnet.fastnear.com`, and per-server retries were shortened so one bad server cannot stall a click.
+
+Verified in the browser: the same guest at 0.10 NEAR was refilled, rented the Aegis Plate, and landed in the arena with no console errors.
+
+## 30. What is "Settle the lease"?
+
+**Answer:** when a lease's time runs out, the renter's key still exists on the item until someone closes the lease. Closing calls `end_rental`, which deletes the renter's key, pays the owner their rent, pays the game its royalty, refunds the renter's unused gas budget, and frees the item for the next renter. Anyone can call it, so an owner never depends on the renter showing up.
+
+**Fix:** the wording. The buttons now say "Close lease and pay out" (item page), "Close lease and get paid" (owner) and "Close lease and get my refund" (renter), with one line explaining what happens. The arena closes guests' finished leases automatically, and `scripts/keeper.ts` closes any expired lease on a schedule.
