@@ -358,15 +358,6 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
       return out;
     };
 
-    /** The final strike jolts the letters once, nearest first, then they settle. */
-    const shake = (x: number, y: number, t: number) => {
-      const hit = T_FINAL_STRIKE + Math.hypot(x - STRIKES[5].x, y - STRIKES[5].y) / 1.2;
-      const kk = t - hit;
-      if (kk < 0 || kk > 800) return { ox: 0, oy: 0 };
-      const damp = Math.exp(-kk / 200);
-      return { ox: Math.sin(kk / 30) * 9 * damp, oy: Math.cos(kk / 38) * 5 * damp };
-    };
-
     const BUCKETS = 10;
     const bucketStyle = Array.from({ length: BUCKETS + 1 }, (_, i) => {
       const e = i / BUCKETS;
@@ -381,16 +372,12 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
         if (kk <= 0) continue;
         const e = easeOut(clamp(kk));
         const u = 1 - e;
-        let x = u * u * m.sx + 2 * u * e * m.cx + e * e * m.tx;
-        let y = u * u * m.sy + 2 * u * e * m.cy + e * e * m.ty;
+        const x0 = u * u * m.sx + 2 * u * e * m.cx + e * e * m.tx;
+        const y0 = u * u * m.sy + 2 * u * e * m.cy + e * e * m.ty;
         const drift = (1 - e) * 12;
-        x += Math.sin(t / 240 + m.wob) * drift;
-        y += Math.cos(t / 300 + m.wob * 1.3) * drift;
-        if (e >= 1) {
-          const s = shake(m.tx, m.ty, t);
-          x += s.ox;
-          y += s.oy;
-        }
+        // landed grains stay exactly where they belong: no shake, no ripple
+        const x = x0 + Math.sin(t / 240 + m.wob) * drift;
+        const y = y0 + Math.cos(t / 300 + m.wob * 1.3) * drift;
         // electric blue in flight, cooling to gold as it lands
         batches[Math.round(e * BUCKETS)].push(x, y, m.size * (1 + u * 0.7));
       }
