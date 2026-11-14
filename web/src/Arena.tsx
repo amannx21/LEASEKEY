@@ -1137,13 +1137,26 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       ctx.font = "700 46px Cinzel, Georgia, serif";
       ctx.fillText("The slimes overran you", W / 2, H / 2 - 10);
       ctx.font = "500 19px Manrope Variable, system-ui, sans-serif";
-      ctx.fillText(`${kills} slimes defeated. Click or press Space to fight again.`, W / 2, H / 2 + 30);
+      const leased = game.current.equip?.onChain;
+      ctx.fillText(
+        leased
+          ? `${kills} slimes defeated. Back in ${Math.max(1, Math.ceil(AUTO_RESTART - overFor))} with your leased gear, or press Space now.`
+          : `${kills} slimes defeated. Click or press Space to fight again.`,
+        W / 2, H / 2 + 30);
     }
   };
 
+  // While a lease is running, a lost fight restarts by itself with the gear still equipped,
+  // so the leased time keeps being used for playing rather than waiting on a menu.
+  const AUTO_RESTART = 3;
+  let overFor = 0;
   const frame = (now: number) => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    if (over && game.current.equip?.onChain) {
+      overFor += dt;
+      if (overFor >= AUTO_RESTART) reset();
+    } else overFor = 0;
     update(dt);
     draw();
     raf = requestAnimationFrame(frame);
