@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "LeaseKey factory: NEP-171 NFT contract that gives every item its own NEAR account"
-repository = "https://github.com/leasekey/leasekey"
+repository = "https://github.com/amannx21/leasekey"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

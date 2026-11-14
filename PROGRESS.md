@@ -52,7 +52,7 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 14 Nov 2026.
 ## Still to do before submission
 
 - [ ] Host the frontend (Vercel or Netlify) and add the link to the README. Needs the repo owner's hosting account.
-- [ ] Push the repo to GitHub and replace `<this repo>` in the README.
+- [x] Pushed to GitHub: https://github.com/amannx21/leasekey
 - [ ] Record the 90-second demo from DEMO.md.
 - [ ] Test the wallet path (MyNearWallet, Meteor) by hand with a real testnet wallet.
 
