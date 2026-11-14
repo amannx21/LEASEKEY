@@ -82,8 +82,12 @@ export function ChainProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6500);
   }, []);
 
+  const firstLoad = useRef(true);
   const refresh = useCallback(async () => {
-    if (document.hidden) return; // do not spend RPC quota in a background tab
+    // Background tabs skip the periodic refresh to save RPC quota, but the first load always runs,
+    // so a page opened in a background tab is ready when the visitor switches to it.
+    if (document.hidden && !firstLoad.current) return;
+    firstLoad.current = false;
     if (txInFlight > 0) return; // leave the quota to the transaction being sent
     try {
       setItems(await loadItems());
@@ -99,7 +103,10 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, 15000); // each refresh reads every item, so keep it gentle on public RPCs
-    return () => clearInterval(t);
+    // coming back to the tab shows fresh state at once instead of waiting for the next tick
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
   }, [refresh]);
 
   // Restore a wallet session (for example after a MyNearWallet redirect).
