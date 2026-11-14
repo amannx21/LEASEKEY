@@ -99,7 +99,7 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/release
 ### 1. Install
 
 ```bash
-git clone https://github.com/amannx21/leasekey.git && cd leasekey
+git clone https://github.com/amannx21/LEASEKEY.git leasekey && cd leasekey
 npm install
 npm --prefix web install
 ```
