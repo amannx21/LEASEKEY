@@ -1,229 +1,271 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./ui";
 
-// Logical stage size; the canvas renders at device resolution and scales with CSS.
+// The hero plays once when the page opens: a knight raises the Thunder Hammer,
+// it charges, he swings, and an electric beam blasts into the headline, which
+// forms out of glowing dust while thunder strikes around him and the words.
+// Everything is drawn with additive light on a transparent canvas, so it reads
+// as light falling on the page rather than a box on top of it.
+
 const W = 1200;
-const H = 500;
-// The gauntlet sits on the warrior's raised right hand; its cuff is at (260, 470) in the art.
-const GAUNTLET = { x: 150, y: 28, size: 232 };
-const GROUND = 470;
-const BODY_X = 150;
-// Stone centres and fingertip in the 512px gauntlet art.
-const STONES = [
-  { x: 199, y: 262, c: "#ff5a4a" },
-  { x: 239, y: 262, c: "#4aa0ff" },
-  { x: 279, y: 262, c: "#4aff8a" },
-  { x: 319, y: 262, c: "#c05aff" },
-  { x: 260, y: 308, c: "#ffc83a" },
-];
-const FINGERS = { x: 262, y: 110 };
+const H = 520;
+// The canvas bleeds past the content column so light fades out into the page instead of stopping at an edge.
+const PAD = 180;
+const GROUND = 478;
+const BODY_X = 160;
 const LINES = [
-  { text: "Rent", x: 430, y: 250, size: 176 },
-  { text: "in-game gear", x: 436, y: 370, size: 82 },
+  { text: "Rent", x: 440, y: 250, size: 176 },
+  { text: "in-game gear", x: 446, y: 372, size: 82 },
+];
+const TARGET = { x: 520, y: 200 }; // where the beam lands
+
+// timeline, ms
+const T_RISE = 700;
+const T_CHARGE = 1550;
+const T_SWING = 1720;
+const T_BEAM_END = 2450;
+const T_EMIT_SPAN = 900;
+const T_FLIGHT = 1150;
+const T_SETTLE = T_SWING + T_EMIT_SPAN + T_FLIGHT + 250;
+const T_FINAL_STRIKE = T_SETTLE + 150;
+const T_DONE = T_FINAL_STRIKE + 1400;
+
+// thunder strikes: when, and where they land (relative to the canvas)
+const STRIKES = [
+  { t: T_SWING + 30, x: 600, y: 120 },
+  { t: T_SWING + 260, x: 1030, y: 320 },
+  { t: T_SWING + 520, x: 250, y: 150 },
+  { t: T_SWING + 840, x: 900, y: 120 },
+  { t: T_SWING + 1200, x: 60, y: 300 },
+  { t: T_FINAL_STRIKE, x: 760, y: 170 },
 ];
 
-// Timeline in milliseconds.
-const T_RISE = 700;
-const T_STONES = 1500;
-const T_SNAP = 1650;
-const T_EMIT_SPAN = 1100;
-const T_FLIGHT = 1300;
-const T_SETTLE = T_SNAP + T_EMIT_SPAN + T_FLIGHT + 150;
-
-type Mote = {
-  tx: number; ty: number; sx: number; sy: number; cx: number; cy: number;
-  delay: number; dur: number; size: number; hue: number; wob: number;
-};
-
-const art = (x: number, y: number) => ({
-  x: GAUNTLET.x + (x / 512) * GAUNTLET.size,
-  y: GAUNTLET.y + (y / 512) * GAUNTLET.size,
-});
+type Mote = { tx: number; ty: number; sx: number; sy: number; cx: number; cy: number; delay: number; dur: number; size: number; hue: number; wob: number };
+type Bolt = { pts: [number, number][]; forks: [number, number][][]; born: number; life: number; width: number };
 
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+const easeOutBack = (t: number) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** A jagged path from a to b, with the given roughness. */
+function jag(ax: number, ay: number, bx: number, by: number, rough: number, steps = 14): [number, number][] {
+  const pts: [number, number][] = [[ax, ay]];
+  const nx = -(by - ay);
+  const ny = bx - ax;
+  const nl = Math.hypot(nx, ny) || 1;
+  for (let i = 1; i < steps; i++) {
+    const k = i / steps;
+    const off = (Math.random() - 0.5) * rough * Math.sin(k * Math.PI);
+    pts.push([lerp(ax, bx, k) + (nx / nl) * off, lerp(ay, by, k) + (ny / nl) * off]);
+  }
+  pts.push([bx, by]);
+  return pts;
+}
 
 export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const leftRef = useRef<HTMLCanvasElement>(null);
-  const rightRef = useRef<HTMLCanvasElement>(null);
   const [run, setRun] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    canvas.width = W * dpr;
+    canvas.width = (W + PAD * 2) * dpr;
     canvas.height = H * dpr;
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
+    ctx.translate(PAD, 0);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    const gauntlet = new Image();
-    gauntlet.src = "/items/astral-gauntlet.svg";
+    const hammer = new Image();
+    hammer.src = "/items/thunder-hammer.svg";
 
     let raf = 0;
-    let motes: Mote[] = [];
-    let embers: { x: number; y: number; vy: number; life: number }[] = [];
-    let start = 0;
     let stopped = false;
+    let start = 0;
+    let motes: Mote[] = [];
+    let bolts: Bolt[] = [];
+    let beam: [number, number][] = [];
+    let beamAt = 0;
+    const fired = new Set<number>();
 
-    // ------------------------------------------------ sound waves from the snap
-    const origin = art(FINGERS.x, FINGERS.y);
-    const WAVE_SPEED = 0.95; // px per ms
-    let waves: number[] = []; // start times of live waves
-    const fired = new Set<number>(); // every wave ever started, so none restarts
-    let flares: number[] = []; // when a wave reaches the text, the side lightning flares
+    // ------------------------------------------------------------ the knight
+    /** Pose of the hammer arm over time: where the hand is and how the hammer is tilted. */
+    const pose = (t: number) => {
+      const charge = easeOut(clamp((t - T_RISE) / (T_CHARGE - T_RISE)));
+      const swing = clamp((t - T_CHARGE) / (T_SWING - T_CHARGE));
+      const s = swing > 0 ? easeOutBack(swing) : 0;
+      const hand = {
+        x: lerp(lerp(BODY_X + 74, BODY_X + 40, charge), BODY_X + 118, s),
+        y: lerp(lerp(GROUND - 270, GROUND - 300, charge), GROUND - 238, s),
+      };
+      const ang = lerp(lerp(0, -0.95, charge), 0.85, s);
+      return { hand, ang };
+    };
 
-    /** Displacement of a point at (x, y) by every passing wave front. */
-    const waveAt = (x: number, y: number, t: number) => {
-      let dx = 0;
-      let dy = 0;
-      for (const w0 of waves) {
-        const r = (t - w0) * WAVE_SPEED;
-        if (r <= 0) continue;
-        const ddx = x - origin.x;
-        const ddy = y - origin.y;
-        const d = Math.hypot(ddx, ddy) || 1;
-        const band = r - d;
-        if (band < -40 || band > 90) continue;
-        const push = Math.sin(((band + 40) / 130) * Math.PI) * 16 * Math.max(0, 1 - r / 1600);
-        dx += (ddx / d) * push;
-        dy += (ddy / d) * push;
+    // hammer art: grip at (175, 410), head centre at (310, 154) in the 512px image
+    const HSIZE = 220;
+    const k = HSIZE / 512;
+    const headOf = (hand: { x: number; y: number }, ang: number) => {
+      const dx = (310 - 175) * k;
+      const dy = (154 - 410) * k;
+      return { x: hand.x + dx * Math.cos(ang) - dy * Math.sin(ang), y: hand.y + dx * Math.sin(ang) + dy * Math.cos(ang) };
+    };
+
+    const drawKnight = (t: number, rise: number, lit: number) => {
+      const x = BODY_X;
+      const g = GROUND;
+      const lift = (1 - rise) * 40;
+      const sway = Math.sin(t / 700) * 3;
+      const { hand, ang } = pose(t);
+      ctx.save();
+      ctx.globalAlpha = rise;
+      ctx.translate(0, lift);
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.ellipse(x, g + 3, 64, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const cape = ctx.createLinearGradient(x - 40, g - 180, x + 40, g);
+      cape.addColorStop(0, "#b3262f");
+      cape.addColorStop(1, "#3d0a14");
+      ctx.fillStyle = cape;
+      ctx.beginPath();
+      ctx.moveTo(x - 32, g - 172);
+      ctx.quadraticCurveTo(x - 66 - sway, g - 80, x - 78 - sway, g - 2);
+      ctx.lineTo(x + 30, g - 2);
+      ctx.quadraticCurveTo(x + 24, g - 92, x + 28, g - 172);
+      ctx.fill();
+      ctx.fillStyle = "#2b2547";
+      ctx.fillRect(x - 23, g - 80, 20, 72);
+      ctx.fillRect(x + 3, g - 80, 20, 72);
+      ctx.fillStyle = "#17142b";
+      ctx.fillRect(x - 26, g - 12, 25, 12);
+      ctx.fillRect(x + 1, g - 12, 27, 12);
+      const steel = ctx.createLinearGradient(x - 36, 0, x + 36, 0);
+      steel.addColorStop(0, "#5a5480");
+      steel.addColorStop(0.5, "#ece8ff");
+      steel.addColorStop(1, "#5a5480");
+      ctx.fillStyle = steel;
+      ctx.beginPath();
+      ctx.roundRect(x - 36, g - 190, 72, 114, 14);
+      ctx.fill();
+      ctx.fillStyle = "#e9b23f";
+      ctx.fillRect(x - 36, g - 116, 72, 8);
+      ctx.beginPath();
+      ctx.arc(x, g - 152, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#c9c3e6";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 17;
+      ctx.beginPath();
+      ctx.moveTo(x - 32, g - 176);
+      ctx.lineTo(x - 48, g - 96);
+      ctx.stroke();
+      ctx.fillStyle = "#e9b23f";
+      ctx.beginPath();
+      ctx.moveTo(x - 6, g - 240);
+      ctx.quadraticCurveTo(x - 30, g - 282, x - 60 + sway, g - 266);
+      ctx.quadraticCurveTo(x - 30, g - 266, x - 14, g - 236);
+      ctx.fill();
+      ctx.fillStyle = steel;
+      ctx.beginPath();
+      ctx.roundRect(x - 25, g - 248, 50, 60, 16);
+      ctx.fill();
+      ctx.fillStyle = "#120f22";
+      ctx.fillRect(x - 19, g - 226, 38, 9);
+      ctx.fillStyle = "#bfeaff";
+      ctx.shadowColor = "#5cc8ff";
+      ctx.shadowBlur = 10 + lit * 20;
+      ctx.fillRect(x - 14, g - 223, 28, 3);
+      ctx.shadowBlur = 0;
+      // hammer arm
+      ctx.strokeStyle = steel;
+      ctx.lineWidth = 21;
+      ctx.beginPath();
+      ctx.moveTo(x + 30, g - 176);
+      ctx.lineTo(hand.x, hand.y);
+      ctx.stroke();
+      ctx.fillStyle = "#e9b23f";
+      ctx.beginPath();
+      ctx.arc(x + 30, g - 178, 16, 0, Math.PI * 2);
+      ctx.fill();
+      // the hammer itself
+      if (hammer.complete && hammer.naturalWidth) {
+        ctx.save();
+        ctx.translate(hand.x, hand.y);
+        ctx.rotate(ang);
+        ctx.shadowColor = "rgba(140, 200, 255, 0.8)";
+        ctx.shadowBlur = 18 + lit * 40;
+        ctx.drawImage(hammer, -175 * k, -410 * k, HSIZE, HSIZE);
+        ctx.restore();
       }
-      return { dx, dy };
+      ctx.restore();
     };
 
-    /** A letter shakes in a damped wobble after each wave front passes it. */
-    const shakeAt = (x: number, y: number, t: number) => {
-      let ox = 0;
-      let oy = 0;
-      let rot = 0;
-      for (const w0 of waves) {
-        const hit = w0 + Math.hypot(x - origin.x, y - origin.y) / WAVE_SPEED;
-        const k = t - hit;
-        if (k < 0 || k > 900) continue;
-        const damp = Math.exp(-k / 220);
-        ox += Math.sin(k / 32) * 11 * damp;
-        oy += Math.cos(k / 41) * 6 * damp;
-        rot += Math.sin(k / 37) * 0.09 * damp;
+    // ---------------------------------------------------------- lightning
+    const makeBolt = (ax: number, ay: number, bx: number, by: number, born: number, width = 1): Bolt => {
+      const pts = jag(ax, ay, bx, by, Math.hypot(bx - ax, by - ay) * 0.28, 16);
+      const forks: [number, number][][] = [];
+      for (let f = 0; f < 4; f++) {
+        const [fx, fy] = pts[2 + Math.floor(Math.random() * (pts.length - 4))];
+        const len = 40 + Math.random() * 90;
+        const a = Math.atan2(by - ay, bx - ax) + (Math.random() - 0.5) * 1.6;
+        forks.push(jag(fx, fy, fx + Math.cos(a) * len, fy + Math.sin(a) * len, len * 0.4, 6));
       }
-      return { ox, oy, rot };
+      return { pts, forks, born, life: 170 + Math.random() * 90, width };
     };
 
-    const drawWaves = (t: number) => {
-      for (const w0 of waves) {
-        const r = (t - w0) * WAVE_SPEED;
-        if (r <= 0 || r > 1500) continue;
-        const fade = 1 - r / 1500;
-        for (let k = 0; k < 3; k++) {
-          const rr = r - k * 34;
-          if (rr <= 0) continue;
-          ctx.save();
-          ctx.globalAlpha = fade * (0.55 - k * 0.15);
-          ctx.strokeStyle = k === 0 ? "#fff1cf" : "#ffc76a";
-          ctx.lineWidth = (k === 0 ? 4 : 2) * (0.6 + fade);
-          ctx.shadowColor = "#ffb84a";
-          ctx.shadowBlur = 18;
-          ctx.beginPath();
-          // only the arc facing the text, like a sound wave thrown forward
-          ctx.arc(origin.x, origin.y, rr, -1.15, 1.25);
-          ctx.stroke();
-          ctx.restore();
-        }
+    const strokePath = (pts: [number, number][]) => {
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.stroke();
+    };
+
+    /** Three passes of additive light: a wide violet bloom, a cyan body, a white-hot core. */
+    const drawBolt = (b: Bolt, t: number) => {
+      const age = t - b.born;
+      if (age < 0) return;
+      const flicker = age < b.life ? (Math.random() < 0.15 ? 0.35 : 1) : Math.max(0, 1 - (age - b.life) / 380) * 0.5;
+      if (flicker <= 0) return;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      const passes: [string, number, number, string][] = [
+        ["rgba(150, 100, 255, 0.35)", 14 * b.width, 40, "#7a4bff"],
+        ["rgba(110, 200, 255, 0.75)", 5 * b.width, 22, "#5cc8ff"],
+        ["rgba(245, 252, 255, 1)", 1.8 * b.width, 8, "#ffffff"],
+      ];
+      for (const [color, width, blur, glow] of passes) {
+        ctx.globalAlpha = flicker;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = blur;
+        strokePath(b.pts);
+        ctx.lineWidth = width * 0.55;
+        b.forks.forEach(strokePath);
       }
+      ctx.restore();
     };
 
-    const lastWave = (t: number): number | null => {
-      const past = waves.filter((w) => w <= t);
-      return past.length ? Math.max(...past) : null;
+    /** A flash of light around a strike, so the page itself seems lit. */
+    const drawFlash = (x: number, y: number, strength: number, radius: number) => {
+      if (strength <= 0) return;
+      // never let a glow reach the canvas edge, or it shows as a straight cut
+      radius = Math.min(radius, x + PAD, W + PAD - x, H - y + 60);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      g.addColorStop(0, `rgba(190, 220, 255, ${0.32 * strength})`);
+      g.addColorStop(0.4, `rgba(140, 120, 255, ${0.12 * strength})`);
+      g.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      ctx.restore();
     };
 
-    // ------------------------------------------------ lightning down both edges of the window
-    // Lives only for a moment after each snap, then dies away completely.
-    const edges = [leftRef.current!, rightRef.current!];
-    const EDGE_W = 110;
-    let edgeH = 0;
-    const sizeEdges = () => {
-      edgeH = window.innerHeight;
-      for (const c of edges) {
-        c.width = EDGE_W * dpr;
-        c.height = edgeH * dpr;
-        c.getContext("2d")!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
-    };
-    sizeEdges();
-    window.addEventListener("resize", sizeEdges);
-    let edgeClear = true;
-
-    const bolt = (e: CanvasRenderingContext2D, x0: number, spread: number) => {
-      const pts: [number, number][] = [];
-      for (let y = -10; y <= edgeH + 20; y += 18 + Math.random() * 14) pts.push([x0 + (Math.random() - 0.5) * spread, y]);
-      e.beginPath();
-      pts.forEach(([x, y], i) => (i ? e.lineTo(x, y) : e.moveTo(x, y)));
-      e.stroke();
-      // a few short forks reaching inward
-      for (let k = 0; k < 4; k++) {
-        const [fx, fy] = pts[Math.floor(Math.random() * pts.length)];
-        e.beginPath();
-        e.moveTo(fx, fy);
-        let x = fx;
-        let y = fy;
-        for (let j = 0; j < 4; j++) {
-          x += 8 + Math.random() * 14;
-          y += (Math.random() - 0.3) * 26;
-          e.lineTo(x, y);
-        }
-        e.stroke();
-      }
-    };
-
-    const drawEdges = (t: number) => {
-      const since = Math.min(...flares.filter((f) => t >= f).map((f) => t - f), Infinity);
-      const intensity = Math.max(0, 1 - since / 1100);
-      if (intensity <= 0) {
-        if (!edgeClear) {
-          edges.forEach((c) => c.getContext("2d")!.clearRect(0, 0, EDGE_W, edgeH));
-          edgeClear = true;
-        }
-        return;
-      }
-      edgeClear = false;
-      edges.forEach((c, side) => {
-        const e = c.getContext("2d")!;
-        e.clearRect(0, 0, EDGE_W, edgeH);
-        // mirror the right edge so bolts always hug the window border
-        e.save();
-        if (side === 1) {
-          e.translate(EDGE_W, 0);
-          e.scale(-1, 1);
-        }
-        const glow = e.createLinearGradient(0, 0, EDGE_W, 0);
-        glow.addColorStop(0, `rgba(120, 200, 255, ${0.45 * intensity})`);
-        glow.addColorStop(0.35, `rgba(150, 110, 255, ${0.18 * intensity})`);
-        glow.addColorStop(1, "rgba(120, 200, 255, 0)");
-        e.fillStyle = glow;
-        e.fillRect(0, 0, EDGE_W, edgeH);
-        if (since < 650 || Math.random() < intensity * 0.5) {
-          e.lineCap = "round";
-          e.lineJoin = "round";
-          e.globalAlpha = Math.min(1, 0.4 + intensity);
-          e.strokeStyle = "rgba(170, 120, 255, 0.7)";
-          e.lineWidth = 5;
-          e.shadowColor = "#a46bff";
-          e.shadowBlur = 24;
-          bolt(e, 14, 22);
-          e.strokeStyle = "#e6f8ff";
-          e.lineWidth = 1.8;
-          e.shadowColor = "#5cc8ff";
-          e.shadowBlur = 18;
-          bolt(e, 14, 22);
-        }
-        e.restore();
-      });
-    };
-
-    // Sample the final lettering into target points for the dust.
-    const buildMotes = () => {
+    // --------------------------------------------------------------- dust
+    const buildMotes = (head: { x: number; y: number }) => {
       const off = document.createElement("canvas");
       off.width = W;
       off.height = H;
@@ -234,270 +276,127 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
         o.fillText(l.text, l.x, l.y);
       }
       const data = o.getImageData(0, 0, W, H).data;
-      const step = 3;
-      const src = art(FINGERS.x, FINGERS.y);
       const out: Mote[] = [];
-      for (let y = 0; y < H; y += step) {
-        for (let x = 0; x < W; x += step) {
+      for (let y = 0; y < H; y += 3) {
+        for (let x = 0; x < W; x += 3) {
           if (data[(y * W + x) * 4 + 3] < 128) continue;
-          const left = (x - 430) / 700;
+          // each grain leaves from somewhere along the beam
+          const r = Math.random();
+          const sx = lerp(head.x, TARGET.x, r) + (Math.random() - 0.5) * 30;
+          const sy = lerp(head.y, TARGET.y, r) + (Math.random() - 0.5) * 30;
           out.push({
-            tx: x + Math.random() * 1.5, ty: y + Math.random() * 1.5,
-            sx: src.x + (Math.random() - 0.5) * 60, sy: src.y + (Math.random() - 0.5) * 50,
-            // arc up and over before settling, like ash carried on air
-            cx: x - 120 - Math.random() * 160, cy: Math.min(y, src.y) - 120 - Math.random() * 140,
-            delay: T_SNAP + clamp(left) * T_EMIT_SPAN + Math.random() * 220,
+            tx: x + Math.random() * 1.5, ty: y + Math.random() * 1.5, sx, sy,
+            cx: lerp(sx, x, 0.5) + (Math.random() - 0.5) * 160, cy: Math.min(sy, y) - 60 - Math.random() * 120,
+            delay: T_SWING + 60 + clamp((x - 440) / 680) * T_EMIT_SPAN + Math.random() * 200,
             dur: T_FLIGHT * (0.75 + Math.random() * 0.5),
-            size: 1.4 + Math.random() * 1.8,
-            hue: Math.random(),
-            wob: Math.random() * Math.PI * 2,
+            size: 1.4 + Math.random() * 1.8, hue: Math.random(), wob: Math.random() * Math.PI * 2,
           });
         }
       }
       return out;
     };
 
-    /** The warrior who wears the gauntlet. `jx, jy` is the snap jolt of the raised arm. */
-    const drawWarrior = (t: number, rise: number, jx: number, jy: number, lift: number) => {
-      const x = BODY_X;
-      const g = GROUND;
-      const sway = Math.sin(t / 700) * 4;
-      ctx.save();
-      ctx.globalAlpha = rise;
-      ctx.translate(0, lift);
-      // shadow
-      ctx.fillStyle = "rgba(0,0,0,0.4)";
-      ctx.beginPath();
-      ctx.ellipse(x, g + 3, 58, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // cape
-      const cape = ctx.createLinearGradient(x - 40, 300, x + 40, g);
-      cape.addColorStop(0, "#b3262f");
-      cape.addColorStop(1, "#3d0a14");
-      ctx.fillStyle = cape;
-      ctx.beginPath();
-      ctx.moveTo(x - 30, 300);
-      ctx.quadraticCurveTo(x - 62 - sway, 390, x - 72 - sway, g - 2);
-      ctx.lineTo(x + 30 - sway * 0.5, g - 2);
-      ctx.quadraticCurveTo(x + 22, 380, x + 26, 300);
-      ctx.fill();
-      // legs and boots
-      ctx.fillStyle = "#2b2547";
-      ctx.fillRect(x - 22, 392, 19, g - 392 - 8);
-      ctx.fillRect(x + 3, 392, 19, g - 392 - 8);
-      ctx.fillStyle = "#17142b";
-      ctx.fillRect(x - 25, g - 12, 24, 12);
-      ctx.fillRect(x + 1, g - 12, 26, 12);
-      // torso plate
-      const steel = ctx.createLinearGradient(x - 34, 0, x + 34, 0);
-      steel.addColorStop(0, "#5a5480");
-      steel.addColorStop(0.5, "#ece8ff");
-      steel.addColorStop(1, "#5a5480");
-      ctx.fillStyle = steel;
-      ctx.beginPath();
-      ctx.roundRect(x - 34, 290, 68, 110, 14);
-      ctx.fill();
-      ctx.fillStyle = "#e9b23f";
-      ctx.fillRect(x - 34, 362, 68, 8);
-      ctx.beginPath();
-      ctx.arc(x, 328, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ff7a3d";
-      ctx.beginPath();
-      ctx.arc(x, 328, 4, 0, Math.PI * 2);
-      ctx.fill();
-      // left arm, relaxed
-      ctx.strokeStyle = "#c9c3e6";
-      ctx.lineCap = "round";
-      ctx.lineWidth = 16;
-      ctx.beginPath();
-      ctx.moveTo(x - 30, 304);
-      ctx.lineTo(x - 44, 380);
-      ctx.stroke();
-      // helmet with a glowing visor and a gold plume
-      ctx.fillStyle = "#e9b23f";
-      ctx.beginPath();
-      ctx.moveTo(x - 6, 238);
-      ctx.quadraticCurveTo(x - 30, 200, x - 58 + sway, 214);
-      ctx.quadraticCurveTo(x - 30, 214, x - 14, 244);
-      ctx.fill();
-      ctx.fillStyle = steel;
-      ctx.beginPath();
-      ctx.roundRect(x - 24, 234, 48, 58, 16);
-      ctx.fill();
-      ctx.fillStyle = "#120f22";
-      ctx.fillRect(x - 18, 256, 36, 9);
-      ctx.fillStyle = "#ffd27a";
-      ctx.shadowColor = "#ffb84a";
-      ctx.shadowBlur = 12;
-      ctx.fillRect(x - 13, 259, 26, 3);
-      ctx.shadowBlur = 0;
-      // raised right arm up to the gauntlet's cuff
-      const wrist = art(260, 452);
-      ctx.strokeStyle = steel;
-      ctx.lineWidth = 20;
-      ctx.beginPath();
-      ctx.moveTo(x + 30, 304);
-      ctx.lineTo(wrist.x + jx, wrist.y + jy);
-      ctx.stroke();
-      ctx.fillStyle = "#e9b23f";
-      ctx.beginPath();
-      ctx.arc(x + 28, 302, 15, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawGauntlet = (t: number) => {
-      if (!gauntlet.complete || !gauntlet.naturalWidth) return;
-      const rise = easeOut(clamp(t / T_RISE));
-      const w0 = lastWave(t);
-      const snap = w0 !== null ? Math.max(0, 1 - (t - w0) / 260) : 0;
-      const scale = 1 + snap * 0.06;
-      const idle = t > T_SETTLE ? Math.sin((t - T_SETTLE) / 900) * 3 : 0;
-      // the snap jolts the raised arm up and forward
-      const jolt = w0 !== null && t - w0 < 320 ? Math.sin(((t - w0) / 320) * Math.PI) : 0;
-      const jx = jolt * 8;
-      const jy = -jolt * 10 + idle;
-      const lift = (1 - rise) * 40;
-      drawWarrior(t, rise, jx, jy, lift);
-      const g = GAUNTLET;
-      ctx.save();
-      ctx.translate(jx, jy - idle + lift);
-      ctx.save();
-      ctx.globalAlpha = rise;
-      ctx.translate(g.x + g.size / 2, g.y + g.size / 2 + idle);
-      ctx.scale(scale, scale);
-      ctx.translate(-g.size / 2, -g.size / 2);
-      ctx.shadowColor = "rgba(255, 200, 90, 0.55)";
-      ctx.shadowBlur = 40;
-      ctx.drawImage(gauntlet, 0, 0, g.size, g.size);
-      ctx.restore();
-
-      // stones light up one by one, then pulse
-      STONES.forEach((s, i) => {
-        const on = clamp((t - T_RISE - i * ((T_STONES - T_RISE) / STONES.length)) / 180);
-        if (on <= 0) return;
-        const p = art(s.x, s.y);
-        const pulse = t > T_SETTLE ? 0.75 + 0.25 * Math.sin(t / 400 + i) : 1;
-        const r = (18 + snap * 26) * pulse;
-        const glow = ctx.createRadialGradient(p.x, p.y + idle, 0, p.x, p.y + idle, r);
-        glow.addColorStop(0, "rgba(255,255,255,0.95)");
-        glow.addColorStop(0.35, s.c);
-        glow.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.globalAlpha = on * rise;
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y + idle, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      });
-
-      // the snap: a flash at the fingertips
-      if (w0 !== null && t < w0 + 700) {
-        const k = (t - w0) / 700;
-        const p = art(FINGERS.x, FINGERS.y);
-        const flash = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 40 + k * 260);
-        flash.addColorStop(0, `rgba(255,248,225,${0.9 * (1 - k)})`);
-        flash.addColorStop(0.4, `rgba(255,190,90,${0.45 * (1 - k)})`);
-        flash.addColorStop(1, "rgba(255,140,60,0)");
-        ctx.fillStyle = flash;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 40 + k * 260, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
+    /** The final strike jolts the letters once, nearest first, then they settle. */
+    const shake = (x: number, y: number, t: number) => {
+      const hit = T_FINAL_STRIKE + Math.hypot(x - STRIKES[5].x, y - STRIKES[5].y) / 1.2;
+      const kk = t - hit;
+      if (kk < 0 || kk > 800) return { ox: 0, oy: 0 };
+      const damp = Math.exp(-kk / 200);
+      return { ox: Math.sin(kk / 30) * 9 * damp, oy: Math.cos(kk / 38) * 5 * damp };
     };
 
     const drawMotes = (t: number) => {
       for (const m of motes) {
-        const k = (t - m.delay) / m.dur;
-        if (k <= 0) continue;
-        const e = easeOut(clamp(k));
-        // quadratic bezier from the fingertips, up and over, onto the letter
+        const kk = (t - m.delay) / m.dur;
+        if (kk <= 0) continue;
+        const e = easeOut(clamp(kk));
         const u = 1 - e;
         let x = u * u * m.sx + 2 * u * e * m.cx + e * e * m.tx;
         let y = u * u * m.sy + 2 * u * e * m.cy + e * e * m.ty;
-        // drifting turbulence that calms as the mote lands
-        const drift = (1 - e) * 14;
-        x += Math.sin(t / 260 + m.wob) * drift;
-        y += Math.cos(t / 310 + m.wob * 1.3) * drift;
-        const wv = waveAt(x, y, t);
-        x += wv.dx;
-        y += wv.dy;
-        // ash grey to ember to gold as it settles
-        const heat = e;
-        const r = Math.round(140 + (255 - 140) * heat);
-        const gch = Math.round(122 + (214 - 122) * heat * (0.8 + m.hue * 0.2));
-        const b = Math.round(104 + (130 - 104) * heat);
-        // landed grains stay grainy: they shimmer, and shake when a wave hits the word
+        const drift = (1 - e) * 12;
+        x += Math.sin(t / 240 + m.wob) * drift;
+        y += Math.cos(t / 300 + m.wob * 1.3) * drift;
         if (e >= 1) {
-          const sh = shakeAt(m.tx, m.ty - 30, t);
-          x += sh.ox;
-          y += sh.oy;
+          const s = shake(m.tx, m.ty, t);
+          x += s.ox;
+          y += s.oy;
         }
-        const shimmer = e >= 1 ? 0.82 + 0.18 * Math.sin(t / 380 + m.wob * 3) : 1;
-        ctx.globalAlpha = (0.35 + 0.65 * e) * shimmer;
-        ctx.fillStyle = `rgb(${r},${gch},${b})`;
-        const s = m.size * (1 + (1 - e) * 0.8);
+        // electric blue in flight, cooling to gold as it lands
+        const r = Math.round(lerp(150, 255, e));
+        const g = Math.round(lerp(210, 210 + 4 * m.hue, e));
+        const b = Math.round(lerp(255, 128, e));
+        ctx.globalAlpha = 0.4 + 0.6 * e;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        const s = m.size * (1 + u * 0.7);
         ctx.fillRect(x, y, s, s);
       }
       ctx.globalAlpha = 1;
     };
 
-    const drawEmbers = (t: number, dt: number) => {
-      if (t > T_SETTLE && Math.random() < 0.35 && motes.length) {
-        const m = motes[Math.floor(Math.random() * motes.length)];
-        embers.push({ x: m.tx, y: m.ty, vy: 12 + Math.random() * 20, life: 1 });
-      }
-      for (const e of embers) {
-        e.y -= e.vy * dt;
-        e.x += Math.sin(e.y / 20) * 0.3;
-        e.life -= dt * 0.45;
-        ctx.globalAlpha = Math.max(0, e.life) * 0.7;
-        ctx.fillStyle = "#ffc98a";
-        ctx.fillRect(e.x, e.y, 1.6, 1.6);
-      }
-      ctx.globalAlpha = 1;
-      embers = embers.filter((e) => e.life > 0);
-    };
-
-    let last = performance.now();
+    // --------------------------------------------------------------- frame
     const frame = (now: number) => {
       if (stopped) return;
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
       const t = now - start;
-      ctx.clearRect(0, 0, W, H);
-      // schedule: the snap, an aftershock that hits the finished words, then a soft pulse every 7s
-      const due = [T_SNAP, T_SETTLE + 300];
-      for (let k = T_SETTLE + 9300; k < t + 1; k += 9000) due.push(k);
-      for (const d of due) {
-        if (t >= d && !fired.has(d)) {
-          fired.add(d);
-          waves.push(d);
-          flares.push(d);
-        }
+      ctx.clearRect(-PAD, 0, W + PAD * 2, H);
+      const rise = easeOut(clamp(t / T_RISE));
+      const { hand, ang } = pose(t);
+      const head = headOf(hand, ang);
+
+      // the hammer charges: crackles and a growing glow around its head
+      const charging = t > T_RISE && t < T_SWING;
+      const chargeLevel = clamp((t - T_RISE) / (T_SWING - T_RISE));
+      const beamOn = t >= T_SWING && t < T_BEAM_END;
+      const recentStrike = STRIKES.reduce((m, s) => (t >= s.t ? Math.max(m, Math.max(0, 1 - (t - s.t) / 500)) : m), 0);
+      const lit = Math.max(charging ? chargeLevel : 0, beamOn ? 1 : 0, recentStrike);
+
+      drawFlash(head.x, head.y, (charging ? chargeLevel * 0.7 : 0) + (beamOn ? 0.8 : 0), 160);
+      drawKnight(t, rise, lit);
+      if (charging && Math.random() < 0.6) {
+        const a = Math.random() * Math.PI * 2;
+        const len = 25 + chargeLevel * 45;
+        bolts.push({ ...makeBolt(head.x, head.y, head.x + Math.cos(a) * len, head.y + Math.sin(a) * len, t, 0.45), forks: [], life: 60 });
       }
-      waves = waves.filter((w) => t - w < 2600);
-      flares = flares.filter((f) => t - f < 3000);
-      drawWaves(t);
-      drawGauntlet(t);
+
+      // the beam: hammer head to the headline, re-jagged every few frames
+      if (beamOn) {
+        if (t - beamAt > 45) {
+          beam = jag(head.x, head.y, TARGET.x, TARGET.y, 70, 18);
+          beamAt = t;
+        }
+        const fade = 1 - clamp((t - (T_BEAM_END - 250)) / 250);
+        drawBolt({ pts: beam, forks: [], born: t - 1, life: 1000, width: 2.2 * fade + 0.4 }, t);
+        drawFlash(TARGET.x, TARGET.y, fade, 260);
+      }
+
+      // thunder around the knight and the words
+      for (const s of STRIKES) {
+        if (t >= s.t && !fired.has(s.t)) {
+          fired.add(s.t);
+          bolts.push(makeBolt(s.x + (Math.random() - 0.5) * 140, -30, s.x, s.y, t, s.t === T_FINAL_STRIKE ? 1.6 : 1.1));
+          if (Math.random() < 0.6) bolts.push(makeBolt(s.x + 90, -30, s.x + 40 + Math.random() * 60, s.y + 60, t + 40, 0.7));
+        }
+        drawFlash(s.x, s.y * 0.6, t >= s.t ? Math.max(0, 1 - (t - s.t) / 450) : 0, 420);
+      }
+
       drawMotes(t);
-      drawEdges(t);
-      drawEmbers(t, dt);
-      raf = requestAnimationFrame(frame);
+      bolts = bolts.filter((b) => t - b.born < b.life + 400);
+      bolts.forEach((b) => drawBolt(b, t));
+
+      // it happens once: stop drawing when the storm has passed
+      if (t < T_DONE) raf = requestAnimationFrame(frame);
     };
 
     document.fonts.load("700 176px Cinzel").finally(() => {
       if (stopped) return;
-      motes = buildMotes();
-      start = performance.now() - (reduced ? T_SETTLE + 1000 : 0);
+      const p = pose(T_SWING);
+      motes = buildMotes(headOf(p.hand, p.ang));
+      start = performance.now() - (reduced ? T_DONE - 1 : 0);
+      if (reduced) STRIKES.forEach((s) => fired.add(s.t));
       raf = requestAnimationFrame(frame);
     });
     return () => {
       stopped = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", sizeEdges);
     };
   }, [run]);
 
@@ -505,8 +404,6 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
     <section className="hero">
       <h1 className="sr-only">Rent in-game gear. Every item is its own NEAR account.</h1>
       <canvas ref={canvasRef} className="hero-canvas" aria-hidden="true" />
-      <canvas ref={leftRef} className="edge-bolt left" aria-hidden="true" />
-      <canvas ref={rightRef} className="edge-bolt right" aria-hidden="true" />
       <div className="hero-copy">
         <p className="lede">
           LeaseKey is a rental layer for blockchain games. Players lend the items they own without handing them over,
@@ -518,7 +415,7 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
             Enter the armory <Icon name="arrow" />
           </button>
           <button className="ghost big" onClick={onArena}>Fight in the arena</button>
-          <button className="link" onClick={() => setRun((n) => n + 1)}>Replay the snap</button>
+          <button className="link" onClick={() => setRun((n) => n + 1)}>Replay the strike</button>
         </div>
       </div>
     </section>
