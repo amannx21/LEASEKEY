@@ -77,7 +77,8 @@ async function main() {
   const factoryStorage = (BigInt(factoryWasm.length) * near(1)) / 100_000n;
   const codeCost = MODE === "global" ? (itemBytes * near(10)) / 100_000n : (itemBytes * near(1)) / 100_000n;
   const perItem = near("0.16") + (MODE === "embedded" ? codeCost : 0n);
-  const needed = factoryStorage + codeCost + perItem * BigInt(count) + near(6);
+  // also covers the demo owner, the Ember Realms collection and the Slime Arena game contract
+  const needed = factoryStorage + codeCost + perItem * BigInt(count) + near(13);
   await fund(factoryId, needed);
 
   console.log(`==> 2/5 deploying factory + NFT contract (${factoryWasm.length} bytes)`);
@@ -160,7 +161,7 @@ async function main() {
   writeFileSync(DEPLOYMENT_FILE, JSON.stringify(deployment, null, 2) + "\n");
 
   // Spare funds go to a public guest bank, the fallback when the faucet rate-limits visitors.
-  const spare = (await balance(factoryId)) - factoryStorage - near(2);
+  const spare = (await balance(factoryId)) - factoryStorage - near(8); // keep enough for arena-setup
   if (spare > near(1)) await setupGuestBank(factoryId, spare);
 
   console.log(`\nDeployed. Factory balance left: ${fmt(await balance(factoryId))} NEAR`);
