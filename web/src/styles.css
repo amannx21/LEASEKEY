@@ -457,3 +457,8 @@ pre code { background: none; padding: 0; color: #e6dcff; font-size: inherit; }
 .pt-table td small { display: block; color: var(--muted); font-size: 12px; }
 .pt-table td:not(:first-child), .pt-table th:not(:first-child) { text-align: right; }
 @media (max-width: 1000px) { .gb-grid, .pt-grid { grid-template-columns: 1fr; } }
+
+/* lightning down both edges of the window, only on a snap */
+.edge-bolt { position: fixed; top: 0; width: 110px; height: 100vh; pointer-events: none; z-index: 12; }
+.edge-bolt.left { left: 0; }
+.edge-bolt.right { right: 0; }
