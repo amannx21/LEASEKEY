@@ -150,3 +150,18 @@ Every Armory card and item panel also shows the item's game.
 
 - **Lag.** Each frame redrew the hammer's vector art under a heavy blur, blurred every lightning bolt three times, and changed fill style for each of about 5,000 dust grains. Now the hammer is rasterised once with its glow baked in. Lightning glow is layered wide, faint strokes under additive blending instead of blur. Dust is drawn in ten colour batches, and resolution is capped at 2x. Measured over a full replay: 15.9 ms average frame, worst 31 ms, no frame over 33 ms, so a steady 60 fps.
 - **Arm.** It was one straight bar from the shoulder to wherever the hand had to be. It is now an upper arm and a forearm with fixed lengths and a bending elbow, solved each frame. A glove grips the handle, and the hammer is a little smaller.
+
+## 17. Have we actually solved the renting problem? Where do hard-to-get items come from, and what is the NFT for?
+
+**Question:** Items are valuable because they are hard to get. If nobody can mint for free, players grind until they earn a good item. Does LeaseKey really address renting those items, and what role does the NFT play?
+
+**Answer:**
+
+- **The renting problem is solved and proven.** An owner lends an item without handing it over and without collateral. The renter's key can only use it, it stops at expiry, and payment settles itself. This is covered by 16 sandbox tests and verified live on testnet.
+- **Grinding is what creates the market.** Some players have time: they grind and earn rare drops. Others have little time, or are new. Renting connects them. The grinder earns from a rare item while they are offline, and the newcomer uses it for an hour instead of grinding for weeks or buying it outright. Supply caps keep earned items scarce, so they stay worth renting.
+- **What the NFT does.**
+  1. Proof the player owns the earned item, outside the game company's database.
+  2. A standard any marketplace or tool, LeaseKey included, can read without the game building a rental system.
+  3. Movable: it can be sold or lent, and LeaseKey lends it without moving it.
+
+**Gap:** in the demo, items reach the demo owner through a seed script, not through play, so the "earned through grinding" step is simulated. Proposed fix: rare drops in the Arena. Defeating the King Slime has a small chance to mint a capped item to the player, signed by the game's key on a small server, the way a real game would do it.
