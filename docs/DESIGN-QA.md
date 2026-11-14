@@ -176,3 +176,17 @@ Every Armory card and item panel also shows the item's game.
 4. **Renting helps grinding.** A rented strong weapon makes grinding faster, so grinders are customers too.
 
 **Design consequence:** rent should cost far less than the time to grind or the price to buy. The price suggestion already scales with scarcity, so the scarcest items cost the most to rent.
+
+## 19. How does each item apply to its own specific game?
+
+**Answer:** the item is bound to its game on chain, and the game decides what it does. LeaseKey never needs to understand a game's rules.
+
+1. **The game defines the item type** once: name, art, supply cap and up to 8 stats under names the game chooses. A racing game might use speed and handling, an RPG attack and defence.
+2. **The game is written into every item** at creation and cannot change.
+3. **The game checks before honouring an item:** `canUse(item, player, { games: [itself] })` answers whether the player owns or rents it right now and whether it is one of the game's own.
+4. **The game applies its own rules.** It reads the stats and grants the item's effects. When the lease ends the check fails and the game removes it.
+5. **Usage is logged with the game's own action labels** through `use_item(action)`.
+
+Consequences: an item from Game A does nothing in Game B unless B opts in by adding A to its accepted list. Wrapped NFTs stay linked to their original collection, and a game can find the wrapper of its own NFT with `find_wrapped`.
+
+**Remaining gap:** the demo has one playable game. Ember Realms is a second collection without its own game, so cross-game rules are shown by the Arena refusing foreign items, not by a second game accepting its own.
