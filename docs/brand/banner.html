@@ -7,13 +7,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; }
-  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #07060f; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #050505; }
   .stage {
     position: relative; width: 100vw; height: 100vh; overflow: hidden;
     background:
-      radial-gradient(55% 70% at 72% 52%, rgba(124, 77, 255, 0.28), transparent 70%),
+      radial-gradient(55% 70% at 72% 52%, rgba(255, 200, 120, 0.07), transparent 70%),
       radial-gradient(40% 55% at 22% 40%, rgba(233, 178, 63, 0.20), transparent 70%),
-      radial-gradient(120% 90% at 50% 120%, #1a1236, #07060f 60%);
+      radial-gradient(120% 90% at 50% 120%, #1a1714, #050505 60%);
     font-family: Manrope, system-ui, sans-serif; color: #f3ead7;
   }
   /* starfield */
@@ -47,12 +47,12 @@
   .glow { position: absolute; border-radius: 50%; filter: blur(40px); }
   /* the renter's key card, floating in front */
   .lease { position: absolute; right: 6vw; bottom: 9vh; width: 19vw; padding: 1.6vh 1.2vw; border-radius: 16px;
-           background: rgba(18, 14, 34, 0.86); border: 1px solid rgba(233, 178, 63, 0.55);
+           background: rgba(17, 17, 19, 0.88); border: 1px solid rgba(233, 178, 63, 0.55);
            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7), 0 0 30px -8px rgba(233, 178, 63, 0.45); backdrop-filter: blur(6px); }
   .lease .row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9vw; color: #a99fbf; }
   .lease b { color: #fff0c2; font-family: Cinzel, serif; font-size: 1.15vw; }
   .lease .key { margin-top: 1vh; font-family: ui-monospace, Consolas, monospace; font-size: 0.8vw; color: #8fe3c2; }
-  .lease .bar { margin-top: 1vh; height: 6px; border-radius: 99px; background: #0f0b1e; overflow: hidden; }
+  .lease .bar { margin-top: 1vh; height: 6px; border-radius: 99px; background: #0a0a0b; overflow: hidden; }
   .lease .bar i { display: block; height: 100%; width: 64%; background: linear-gradient(90deg, #ff7a3d, #e9b23f); }
   .bolt { position: absolute; opacity: 0.85; }
 </style>

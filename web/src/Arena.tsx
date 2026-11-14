@@ -797,7 +797,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     g.addColorStop(1, "#0e0e10");
     ctx.fillStyle = g;
     ctx.fillRect(0, GROUND, W, H - GROUND);
-    ctx.fillStyle = "#5a4380";
+    ctx.fillStyle = "#4a4239";
     ctx.fillRect(0, GROUND, W, 3);
     ctx.fillStyle = "rgba(255,220,160,.08)";
     for (let x = 0; x < W; x += 64) ctx.fillRect(x + ((t * 6) % 64) * 0, GROUND + 18, 36, 2);

@@ -29,7 +29,7 @@ The owner keeps the item. The renter gets a key that can only use it, for exactl
 <table>
   <tr>
     <td width="50%"><img src="docs/img/item.jpg" alt="An item's detail panel with its stats, supply and rent options"></td>
-    <td width="50%"><img src="docs/img/arena.jpg" alt="The Arena: a knight swings a rented Flame Sword while each strike appears as a transaction"></td>
+    <td width="50%"><img src="docs/img/arena.jpg" alt="The Arena: a knight fires a rented Frost Bow while each shot appears as a use_item transaction"></td>
   </tr>
   <tr>
     <td><b>Every item, in full.</b> Stats from its game, how many will ever exist, who owns it, and its own on-chain account. Pick a length and rent.</td>
