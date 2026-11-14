@@ -757,9 +757,9 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
 
   const drawWorld = () => {
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, "#0b0a1f");
-    sky.addColorStop(0.55, "#22163f");
-    sky.addColorStop(1, "#3b1f3d");
+    sky.addColorStop(0, "#040405");
+    sky.addColorStop(0.55, "#101114");
+    sky.addColorStop(1, "#1d1714");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
     for (const s of stars) {
@@ -777,24 +777,24 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     ctx.fillStyle = "#fff1cf";
     ctx.beginPath(); ctx.arc(1010, 120, 46, 0, 7); ctx.fill();
     // far mountains
-    ctx.fillStyle = "#2a1d4a";
+    ctx.fillStyle = "#17171b";
     ctx.beginPath(); ctx.moveTo(0, GROUND - 40);
     for (let x = 0; x <= W; x += 40) ctx.lineTo(x, GROUND - 150 - 60 * Math.sin(x * 0.006) - 30 * Math.sin(x * 0.019 + 1));
     ctx.lineTo(W, GROUND); ctx.lineTo(0, GROUND); ctx.fill();
     // temple ruins
-    ctx.fillStyle = "#1c1336";
+    ctx.fillStyle = "#18181b";
     for (const px of [520, 600, 680, 760]) ctx.fillRect(px, GROUND - 190, 26, 190);
     ctx.fillRect(500, GROUND - 210, 300, 22);
     ctx.beginPath(); ctx.moveTo(490, GROUND - 210); ctx.lineTo(650, GROUND - 262); ctx.lineTo(810, GROUND - 210); ctx.fill();
     // near hills
-    ctx.fillStyle = "#170f2c";
+    ctx.fillStyle = "#121214";
     ctx.beginPath(); ctx.moveTo(0, GROUND);
     for (let x = 0; x <= W; x += 30) ctx.lineTo(x, GROUND - 46 - 22 * Math.sin(x * 0.012 + 2));
     ctx.lineTo(W, GROUND); ctx.fill();
     // ground
     const g = ctx.createLinearGradient(0, GROUND, 0, H);
-    g.addColorStop(0, "#3b2a55");
-    g.addColorStop(1, "#160f26");
+    g.addColorStop(0, "#33302c");
+    g.addColorStop(1, "#0e0e10");
     ctx.fillStyle = g;
     ctx.fillRect(0, GROUND, W, H - GROUND);
     ctx.fillStyle = "#5a4380";

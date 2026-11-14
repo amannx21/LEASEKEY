@@ -78,7 +78,7 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
     ctx.translate(PAD, 0);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const hammer = new Image();
-    hammer.src = "/items/thunder-hammer.svg";
+    hammer.src = "/hero-hammer.svg"; // the hammer alone, without the armory frame
     let hammerBitmap: HTMLCanvasElement | null = null;
     const GLOW = 30;
     hammer.onload = () => {
