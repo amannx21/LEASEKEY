@@ -625,3 +625,13 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
   }
 }
 @supports (min-height: 100dvh) { .app { min-height: 100dvh; } }
+
+/* arena lease panel on phones: art and text on one row, its buttons on their own row */
+@media (max-width: 720px) {
+  .loadout { gap: 10px; }
+  .weapon { flex-wrap: wrap; width: 100%; padding: 12px; gap: 10px 12px; }
+  .weapon > div { flex: 1 1 calc(100% - 70px); min-width: 0; }
+  .weapon > button { flex: 1 1 0; min-height: 44px; }
+  .weapon b { font-size: 17px; }
+  .score { width: 100%; }
+}
