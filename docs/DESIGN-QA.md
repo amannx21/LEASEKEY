@@ -165,3 +165,14 @@ Every Armory card and item panel also shows the item's game.
   3. Movable: it can be sold or lent, and LeaseKey lends it without moving it.
 
 **Gap:** in the demo, items reach the demo owner through a seed script, not through play, so the "earned through grinding" step is simulated. Proposed fix: rare drops in the Arena. Defeating the King Slime has a small chance to mint a capped item to the player, signed by the game's key on a small server, the way a real game would do it.
+
+## 18. If it is about money, why not just grind instead of renting?
+
+**Answer:** for common items, players will grind, and those items rent cheaply for that reason. For the items that matter, grinding is not a real alternative:
+
+1. **Capped items run out.** Once every edition of a type exists, grinding cannot produce another, and the contract enforces it. After that the only ways to use one are to buy it or rent it, and renting costs a small fraction of buying.
+2. **Time has a price.** A rare drop can take weeks to grind, while an hour's rent costs cents. Time-rich and money-rich players trade with each other.
+3. **Short-term needs.** A raid, a tournament, or trying a weapon before buying. Nobody grinds for weeks for one evening.
+4. **Renting helps grinding.** A rented strong weapon makes grinding faster, so grinders are customers too.
+
+**Design consequence:** rent should cost far less than the time to grind or the price to buy. The price suggestion already scales with scarcity, so the scarcest items cost the most to rent.
