@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LeaseKey banner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #07060f; }
+  .stage {
+    position: relative; width: 100vw; height: 100vh; overflow: hidden;
+    background:
+      radial-gradient(55% 70% at 72% 52%, rgba(124, 77, 255, 0.28), transparent 70%),
+      radial-gradient(40% 55% at 22% 40%, rgba(233, 178, 63, 0.20), transparent 70%),
+      radial-gradient(120% 90% at 50% 120%, #1a1236, #07060f 60%);
+    font-family: Manrope, system-ui, sans-serif; color: #f3ead7;
+  }
+  /* starfield */
+  .stars { position: absolute; inset: 0; background-image:
+      radial-gradient(1.4px 1.4px at 8% 18%, #fff7e0 60%, transparent),
+      radial-gradient(1.2px 1.2px at 23% 72%, #fff7e0 60%, transparent),
+      radial-gradient(1.6px 1.6px at 41% 12%, #fff7e0 60%, transparent),
+      radial-gradient(1px 1px at 55% 84%, #fff7e0 60%, transparent),
+      radial-gradient(1.4px 1.4px at 66% 9%, #fff7e0 60%, transparent),
+      radial-gradient(1px 1px at 79% 63%, #fff7e0 60%, transparent),
+      radial-gradient(1.6px 1.6px at 91% 22%, #fff7e0 60%, transparent),
+      radial-gradient(1.2px 1.2px at 96% 81%, #fff7e0 60%, transparent),
+      radial-gradient(1px 1px at 33% 44%, #fff7e0 60%, transparent),
+      radial-gradient(1.2px 1.2px at 13% 90%, #fff7e0 60%, transparent);
+    opacity: 0.55; }
+  .copy { position: absolute; left: 7vw; top: 50%; transform: translateY(-52%); width: 44vw; }
+  .mark { display: flex; align-items: center; gap: 1.2vw; margin-bottom: 2.6vh; }
+  .mark svg { width: 3.4vw; height: 3.4vw; }
+  .mark span { font-family: Cinzel, serif; font-weight: 700; font-size: 2.1vw; letter-spacing: 0.08em; color: #fff0c2; }
+  h1 { font-family: Cinzel, serif; font-weight: 700; font-size: 5.6vw; line-height: 1.02; letter-spacing: 0.01em;
+       color: #fff6dc; text-shadow: 0 0 40px rgba(255, 200, 110, 0.35); }
+  h1 em { font-style: normal; color: #e9b23f; }
+  p.sub { margin-top: 3vh; font-size: 1.45vw; line-height: 1.5; color: #cfc4e2; max-width: 38vw; }
+  .chips { display: flex; gap: 0.8vw; margin-top: 3.6vh; flex-wrap: wrap; }
+  .chip { font-weight: 800; font-size: 1vw; letter-spacing: 0.04em; padding: 0.7vh 1vw; border-radius: 99px;
+          border: 1px solid rgba(233, 178, 63, 0.5); background: rgba(233, 178, 63, 0.10); color: #fff0c2; }
+  /* the arsenal: items arranged in a fan, the hero item in front */
+  .arsenal { position: absolute; right: 3vw; top: 50%; width: 46vw; height: 80vh; transform: translateY(-50%); }
+  .it { position: absolute; filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.6)); }
+  .it img { width: 100%; height: 100%; display: block; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(40px); }
+  /* the renter's key card, floating in front */
+  .lease { position: absolute; right: 6vw; bottom: 9vh; width: 19vw; padding: 1.6vh 1.2vw; border-radius: 16px;
+           background: rgba(18, 14, 34, 0.86); border: 1px solid rgba(233, 178, 63, 0.55);
+           box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7), 0 0 30px -8px rgba(233, 178, 63, 0.45); backdrop-filter: blur(6px); }
+  .lease .row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9vw; color: #a99fbf; }
+  .lease b { color: #fff0c2; font-family: Cinzel, serif; font-size: 1.15vw; }
+  .lease .key { margin-top: 1vh; font-family: ui-monospace, Consolas, monospace; font-size: 0.8vw; color: #8fe3c2; }
+  .lease .bar { margin-top: 1vh; height: 6px; border-radius: 99px; background: #0f0b1e; overflow: hidden; }
+  .lease .bar i { display: block; height: 100%; width: 64%; background: linear-gradient(90deg, #ff7a3d, #e9b23f); }
+  .bolt { position: absolute; opacity: 0.85; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stars"></div>
+
+  <div class="copy">
+    <div class="mark">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="14" cy="20" r="9" fill="none" stroke="#e9b23f" stroke-width="3"/>
+        <path d="M22 20 H36 M31 20 V26 M27 20 V24" stroke="#e9b23f" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="14" cy="20" r="3" fill="#ff7a3d"/>
+      </svg>
+      <span>LEASEKEY</span>
+    </div>
+    <h1>Rent the gear.<br><em>Keep the key.</em></h1>
+    <p class="sub">Lend in-game items without handing them over. Renters play instantly, with no collateral and no wallet pop-ups. Owners and games get paid automatically.</p>
+    <div class="chips">
+      <span class="chip">No collateral</span>
+      <span class="chip">Owner keeps the item</span>
+      <span class="chip">Built on NEAR</span>
+    </div>
+  </div>
+
+  <div class="arsenal">
+    <div class="glow" style="left:28%; top:22%; width:46%; height:52%; background:rgba(255,200,90,0.35)"></div>
+    <div class="glow" style="left:2%; top:10%; width:30%; height:36%; background:rgba(92,200,255,0.25)"></div>
+    <div class="glow" style="left:66%; top:40%; width:30%; height:36%; background:rgba(255,79,216,0.22)"></div>
+    <div class="it" style="left:0%;  top:8%;  width:30%; height:38%; transform:rotate(-14deg)"><img src="../../web/public/items/frost-bow.svg" alt=""></div>
+    <div class="it" style="left:60%; top:0%;  width:28%; height:36%; transform:rotate(12deg)"><img src="../../web/public/items/thunder-hammer.svg" alt=""></div>
+    <div class="it" style="left:4%;  top:52%; width:27%; height:35%; transform:rotate(-6deg)"><img src="../../web/public/items/photon-saber.svg" alt=""></div>
+    <div class="it" style="left:68%; top:42%; width:28%; height:36%; transform:rotate(8deg)"><img src="../../web/public/items/plasma-blaster.svg" alt=""></div>
+    <div class="it" style="left:22%; top:16%; width:56%; height:72%;"><img src="../../web/public/items/astral-gauntlet.svg" alt=""></div>
+    <svg class="bolt" style="left:52%; top:-4%; width:10%; height:30%" viewBox="0 0 40 120" fill="none">
+      <path d="M22 0 L10 46 L24 50 L8 120" stroke="#dff6ff" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M22 0 L10 46 L24 50 L8 120" stroke="#7a4bff" stroke-width="9" stroke-opacity="0.35" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <div class="lease">
+    <div class="row"><b>Astral Gauntlet</b><span>1 of 1</span></div>
+    <div class="row" style="margin-top:0.6vh"><span>Leased · 1:47 left</span><span>0.22 NEAR/hr</span></div>
+    <div class="bar"><i></i></div>
+    <div class="key">key can call: use_item only</div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,80 +1,51 @@
-<h1 align="center">LeaseKey</h1>
-
 <p align="center">
-  <b>Rent in-game gear on NEAR. No collateral. No trust. No wallet pop-ups.</b><br>
-  A rental layer for blockchain games, where every item is its own account that rents itself out.
+  <img src="docs/img/banner.jpg" alt="LeaseKey: Rent the gear. Keep the key." width="100%">
 </p>
 
 <p align="center">
-  <img alt="Live on NEAR testnet" src="https://img.shields.io/badge/NEAR-testnet%20live-e9b23f?style=flat-square">
-  <img alt="17 sandbox tests passing" src="https://img.shields.io/badge/contract%20tests-17%20passing-4fd08a?style=flat-square">
-  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8fb8ff?style=flat-square">
-  <img alt="Built at NEAR Hackathon 2026" src="https://img.shields.io/badge/built%20at-NEAR%20Hackathon%202026-ff7a3d?style=flat-square">
+  <a href="#see-it"><b>See it</b></a> ·
+  <a href="#how-it-works"><b>How it works</b></a> ·
+  <a href="#run-it"><b>Run it</b></a> ·
+  <a href="#build-on-it"><b>Build on it</b></a> ·
+  <a href="https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet"><b>Live contract</b></a>
 </p>
 
-<p align="center">
-  <img src="docs/img/landing.jpg" alt="The LeaseKey landing page: a knight strikes with a thunder hammer and the words Rent in-game gear form out of gold dust" width="100%">
-</p>
+**LeaseKey lets players rent out the rare items they own in a game, without ever handing them over.**
 
-<p align="center">
-  <img src="web/public/items/astral-gauntlet.svg" width="64" alt="Astral Gauntlet">
-  <img src="web/public/items/thunder-hammer.svg" width="64" alt="Thunder Hammer">
-  <img src="web/public/items/flame-sword.svg" width="64" alt="Flame Sword">
-  <img src="web/public/items/photon-saber.svg" width="64" alt="Photon Saber">
-  <img src="web/public/items/frost-bow.svg" width="64" alt="Frost Bow">
-  <img src="web/public/items/plasma-blaster.svg" width="64" alt="Plasma Blaster">
-  <img src="web/public/items/aegis-plate.svg" width="64" alt="Aegis Plate">
-  <img src="web/public/items/tide-trident.svg" width="64" alt="Tide Trident">
-</p>
+The owner keeps the item. The renter gets a key that can only use it, for exactly as long as they paid. When time runs out, the key stops working and the rent pays the owner and the game. No collateral, no trust, and no wallet pop-ups while playing.
 
-## The problem
-
-In blockchain games, players truly own their items. That is exactly what makes lending them risky.
-
-| Today's way to rent | What goes wrong |
+| | |
 |---|---|
-| **Hand the item over** and trust the renter | Owners lose items and earnings. This is how game "scholarships" failed. |
-| **Demand collateral** worth the whole item | Shuts out exactly the players who cannot afford the item. |
+| **For players** | Use a legendary item for an hour instead of grinding for weeks or buying it outright. |
+| **For owners** | Earn from rare items while you're offline. Nobody can keep or sell them. |
+| **For games** | Earn a royalty on every rental, with no marketplace to build or run. |
 
-Rare items sit idle in their owners' wallets, and players who cannot afford them cannot play with them.
+<h2 id="see-it">See it</h2>
 
-## The idea
+<img src="docs/img/armory.jpg" alt="The Armory: item cards with game, edition, stats and price per hour" width="100%">
 
-**The item is an account, and renting hands out a key that can only play.**
-
-1. **Every item is its own NEAR account.** `flame-sword-1.leasekey-lq3d9s.testnet` holds its own rent and state, and no person holds a key to it. Only its code controls it.
-2. **Renting never moves the item.** The item's account adds an access key for the renter that can call one method, `use_item`, and nothing else. Transfers, sales and withdrawals are rejected by the NEAR protocol itself.
-3. **The clock is enforced on chain.** After expiry the key stops working, anyone can close the lease, and the rent splits between the owner and the game.
-4. **Players never notice the chain.** The key lives in the browser and the item pays its own gas, so every strike is a real transaction with no wallet pop-up.
-5. **Scarcity is protected.** Only registered games create items, from types they defined once with fixed stats and a hard supply cap. Nobody can mint a copy or a stronger version.
+**The Armory.** Every item shows the game it belongs to, how rare it is ("Edition 1 of 3"), that game's own stats, and an hourly price that follows its scarcity.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/img/armory.jpg" alt="The Armory: item cards showing game, edition, stats and price per hour"></td>
-    <td width="50%"><img src="docs/img/arena.jpg" alt="The Arena: a knight swings a rented Flame Sword while the on-chain feed lists each strike as a transaction"></td>
+    <td width="50%"><img src="docs/img/item.jpg" alt="An item's detail panel with its stats, supply and rent options"></td>
+    <td width="50%"><img src="docs/img/arena.jpg" alt="The Arena: a knight swings a rented Flame Sword while each strike appears as a transaction"></td>
   </tr>
   <tr>
-    <td><b>The Armory.</b> Every item shows its game, its edition ("1 of 5"), the game's own stats, and a price that follows scarcity.</td>
-    <td><b>The Arena.</b> Each strike with a rented item is a signed transaction. The feed on the right shows them landing, and the "Try to cheat" buttons show the key refusing everything else.</td>
+    <td><b>Every item, in full.</b> Stats from its game, how many will ever exist, who owns it, and its own on-chain account. Pick a length and rent.</td>
+    <td><b>Play with it.</b> Each strike is a real transaction, signed in the background. Try to steal the item with the same key and the chain refuses.</td>
   </tr>
 </table>
 
-## Try it in two minutes
+<h2 id="how-it-works">How it works</h2>
 
-You need only Node.js 22 or newer. The app talks to the live testnet deployment with no configuration.
+**Every item is its own account, and renting hands out a key that can only play.**
 
-```bash
-git clone https://github.com/amannx21/LEASEKEY.git leasekey && cd leasekey
-npm install
-npm --prefix web install
-npm run dev
-```
-
-Open http://localhost:5173, click **Play as guest**, rent something in the **Armory**, and fight in the **Arena**. No wallet is needed: guest mode creates a throwaway testnet account.
-
-To check the live contracts from the command line instead, run `npm run e2e`. It rents an item, plays, tries to steal it, waits for expiry and settles, printing `PASS` per check.
-
-## How a lease works
+1. **The item is an account.** `flame-sword-1.leasekey-lq3d9s.testnet` holds its own rent and state. No person holds a key to it, so only its code controls it.
+2. **Renting never moves the item.** The item's account adds a key for the renter that can call one thing, `use_item`. Transfers, sales and withdrawals are rejected by the NEAR protocol itself.
+3. **Time is enforced on chain.** When the lease ends the key stops working, anyone can close the lease, and the rent splits between the owner and the game automatically.
+4. **Play feels normal.** The key lives on the player's device and the item pays its own gas, so there's no wallet pop-up on any action.
+5. **Rare stays rare.** Only games create items, from types they define once with fixed stats and a hard cap on how many can exist. Nobody can mint a copy or a stronger version.
 
 ```mermaid
 sequenceDiagram
@@ -108,39 +79,39 @@ sequenceDiagram
     I-->>R: unused gas budget
 ```
 
-### Why this only works on NEAR
+### Who can do what
 
-- **Named sub-accounts** let an asset be an account that owns money and state.
-- **Function-call access keys** give a scoped permission at the protocol level, so "can play but cannot steal" does not depend on anyone's good behaviour.
-- **Global contracts** let every item account share one immutable code hash, so an item account costs about 0.15 NEAR instead of 1.8 NEAR.
-
-## Who does what
-
-| Role | What they do | What they can never do |
+| | Can | Can never |
 |---|---|---|
-| **Game** | Registers, defines item types with stats and supply caps, mints editions to players, earns a royalty on every lease, decides which games' items it honours | Mint past a cap, mint a stronger copy, or change a type once defined |
-| **Owner** | Receives items from games or wraps one they already own, sets a price, earns rent | Cancel, unlist, revoke or unwrap during a lease |
-| **Renter** | Pays rent, plays with a session key, returns early for a refund, extends | Transfer, sell or withdraw anything, or play after expiry |
-| **LeaseKey** | Runs the rental layer | Hand out items. That is always a game's job |
+| **Game** | Define its items and their stats once, mint them to players, earn on every lease, choose which games' items it honours | Make more than the cap, mint a stronger copy, change an item type |
+| **Owner** | Receive items from games, bring items they already own, set a price, earn rent | Cancel, revoke or take back an item mid-lease |
+| **Renter** | Use the item, return early for a refund, extend | Transfer, sell or withdraw it, or keep using it after time is up |
 
-## Live on NEAR testnet
+### Why NEAR
 
-| What | Where |
-|---|---|
-| Factory and NEP-171 contract | [`leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet) |
-| Example item account | [`flame-sword-1.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/flame-sword-1.leasekey-lq3d9s.testnet) |
-| Slime Arena, the demo game: its own contract and registered game | [`arena.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/arena.leasekey-lq3d9s.testnet) |
-| Ember Realms, a second game's item collection, for wrapping | [`ember.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/ember.leasekey-lq3d9s.testnet) |
-| Launch collection "LeaseKey Originals" | the factory account |
-| Demo item owner | `owner.leasekey-lq3d9s.testnet` |
-| Item code | Global contract, referenced by code hash |
-| Frontend | Run locally with `npm run dev`. Not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`. |
+- **Named accounts** let an item be an account that owns money and state.
+- **Function-call access keys** give a "can use, cannot steal" permission at the protocol level.
+- **Global contracts** let every item share one code hash, so each item account costs about 0.15 NEAR to create.
 
-The IDs are also in [`web/src/deployment.json`](web/src/deployment.json) and [`.env.example`](.env.example).
+<h2 id="run-it">Run it</h2>
 
-## Run everything
+You need only Node.js 22 or newer. The app connects to the live testnet deployment with no setup.
 
-### Prerequisites
+```bash
+git clone https://github.com/amannx21/LEASEKEY.git leasekey && cd leasekey
+npm install
+npm --prefix web install
+npm run dev
+```
+
+Open http://localhost:5173, click **Play as guest**, rent something in the **Armory**, and fight in the **Arena**. Guest mode creates a free testnet account for you, so no wallet is needed.
+
+<details>
+<summary><b>Build, test and deploy the contracts</b></summary>
+
+<br>
+
+#### Prerequisites
 
 | Tool | Version tested | Needed for |
 |---|---|---|
@@ -157,23 +128,7 @@ Install cargo-near (only for building contracts):
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
 ```
 
-### 1. Install
-
-```bash
-git clone https://github.com/amannx21/LEASEKEY.git leasekey && cd leasekey
-npm install
-npm --prefix web install
-```
-
-### 2. Run the frontend against the live testnet deployment
-
-```bash
-npm run dev
-```
-
-Open http://localhost:5173. The landing page explains the idea. Click **Play as guest**, open the **Armory**, rent any of the 12 weapons and armour pieces for 2 minutes, and fight in the **Arena**. Each item has its own attack style. On **My Items** you can also claim an item from the demo game "Ember Realms" and wrap it to rent it out. No wallet is needed: guest mode creates a throwaway testnet account from the public faucet. If the faucet is rate limited, the deployment's guest bank account funds it instead.
-
-### 3. Verify the live deployment from the command line (about 90 seconds)
+#### Check the live contracts from the command line (about 90 seconds)
 
 ```bash
 npm run e2e
@@ -181,7 +136,7 @@ npm run e2e
 
 This rents an item for 60 seconds with a fresh throwaway account, strikes three times with the session key, proves the key cannot do anything else, waits for expiry, and settles. It prints `PASS` per check and ends with `E2E OK`.
 
-### 4. Build and test the contracts
+#### Build and test the contracts
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
@@ -191,7 +146,7 @@ cd .. && cargo test            # unit tests for the rent, refund and split math
 
 The first `cargo test` in `tests/` downloads the NEAR sandbox binary and takes a few minutes to compile.
 
-### 5. Deploy your own copy to testnet (optional)
+#### Deploy your own copy to testnet
 
 ```bash
 bash scripts/deploy.sh                 # global-contract mode, 12 demo items
@@ -200,21 +155,62 @@ MODE=embedded bash scripts/deploy.sh   # fallback: copy the wasm into every item
 
 The script creates throwaway faucet accounts, deploys, seeds demo items, and rewrites `web/src/deployment.json`. Keys are stored in `.leasekey/keys`, which is git-ignored. It never touches mainnet.
 
-### 6. Run the keeper (optional)
+#### Run the keeper
 
 ```bash
 npm run keeper            # loops, ends every expired rental
 npm run keeper -- --once  # single pass
 ```
 
-## What is built, and how to verify each part
+</details>
 
-Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.rs`](tests/tests/games.rs). "Demo" refers to the steps in [DEMO.md](DEMO.md).
+<h2 id="build-on-it">Build on it</h2>
+
+A game adds rentals with one check before it honours an item:
+
+```ts
+import { LeaseKey } from "@leasekey/sdk";
+
+const lk = new LeaseKey({ factoryId: "leasekey-lq3d9s.testnet" });
+const access = await lk.canUse(itemId, player, { games: ["your-game.testnet"] });
+if (access.ok) equip(itemId, access.power, access.endsAt);
+```
+
+<img src="docs/img/devs.jpg" alt="The developer page with integration code and a live access check" width="100%">
+
+- **The SDK** in [`sdk/`](sdk/) covers renting, session keys, access checks and bringing in existing NFTs. `npm run sdk:example` runs a full rent, play and return against testnet.
+- **A complete example game.** [`contracts/arena-game`](contracts/arena-game/src/lib.rs) is a game built only on LeaseKey's public interface. It decides which games' items it accepts and rewards its own players by minting rare items.
+- **Bring an existing collection.** Players can deposit NFTs they already own from an integrated game. LeaseKey holds the original, applies the game's own stats, and returns it on request.
+
+## Live on testnet
+
+| | Account |
+|---|---|
+| LeaseKey contract | [`leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet) |
+| An item, as its own account | [`flame-sword-1.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/flame-sword-1.leasekey-lq3d9s.testnet) |
+| Slime Arena, an example game | [`arena.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/arena.leasekey-lq3d9s.testnet) |
+| Ember Realms, an example game collection | [`ember.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/ember.leasekey-lq3d9s.testnet) |
+
+## How it compares
+
+| Approach | How the renter gets access | What it leaves open |
+|---|---|---|
+| Transfer and trust (Axie-style scholarships) | The item or account is handed over | The renter can keep or misuse it |
+| Collateralized rental (for example reNFT's default mode) | The renter posts collateral worth the item | Shuts out players who cannot afford the item |
+| A "user" role on the token (ERC-4907) or a rental registry (reNFT collateral-free) | A temporary role the game reads | In the ERC-4907 reference flow the lender can reset the user and end the rental early |
+| A game's own rental market (Splinterlands) | Built into that one game | Works only inside that game |
+| **LeaseKey** | A NEAR access key on the item's own account that can only call `use_item` | See below |
+
+LeaseKey's difference: the renter acts through a real key with no wallet and no gas, the owner can never end a lease early, the item escrows and pays out its own rent, and scarcity and game identity are built into the protocol. Like every approach above, a game still has to check the lease for it to matter.
+
+## Under the hood
 
 <details>
-<summary><b>Full feature list with the test or screen that proves each one</b></summary>
+<summary><b>Everything that is built, and the test or screen that proves it</b></summary>
 
 <br>
+
+Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.rs`](tests/tests/games.rs). "Demo" refers to [DEMO.md](DEMO.md).
 
 | Feature | How to verify |
 |---|---|
@@ -251,7 +247,10 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 
 </details>
 
-## Architecture
+<details>
+<summary><b>Architecture</b></summary>
+
+<br>
 
 | Path | What it is |
 |---|---|
@@ -271,18 +270,18 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 
 **Money flow.** `rent` takes the rent plus a gas budget of at least 0.01 NEAR. Each `use_item` is charged a flat 0.0005 NEAR against that budget, which covers the measured gas cost of about 0.0002 NEAR that the item account pays. At settlement the unused budget returns to the renter. Every payout uses a callback, and a failed transfer is credited to a `claim()` balance, so funds cannot get stuck.
 
-## Security
+</details>
+
+<details>
+<summary><b>Security model and known limitations</b></summary>
+
+<br>
 
 | | Can | Cannot, and what stops it |
 |---|---|---|
-| **Renter's session key** | Call `use_item` on the one item it was added to, until expiry or until its gas budget runs out | Call any other method or contract, attach or move NEAR, or exceed its gas allowance. The NEAR protocol rejects these. |
-| **Owner during a lease** | Transfer the item; the lease continues and rent goes to whoever owns it at settlement | Unlist, reprice, end the lease early, revoke the key or unwrap. The item contract has no path for it, and there is no burn method. |
-| **Game** | Define types and mint editions up to the cap | Exceed a cap or alter a type. The factory refuses. |
-
-<details>
-<summary><b>Known limitations</b></summary>
-
-<br>
+| **Renter's key** | Call `use_item` on its one item, until expiry or until its gas budget runs out | Call any other method or contract, move NEAR, or exceed its gas allowance. The NEAR protocol rejects these. |
+| **Owner during a lease** | Transfer the item; the lease continues and rent goes to whoever owns it at the end | Unlist, reprice, end the lease, revoke the key or unwrap. The item contract has no path for it. |
+| **Game** | Define types and mint up to the cap | Exceed a cap or change a type. The contract refuses. |
 
 - The factory account still has a full-access key held by the deployer, and was used once to upgrade the factory in place. A malicious deployer could upgrade it again and reassign item owners or release escrowed NFTs. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
 - After expiry the key stays on the account until someone calls `end_rental`. The contract rejects it in the meantime. The keeper and the game client both call `end_rental`.
@@ -299,48 +298,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 
 </details>
 
-## How this compares
-
-NFT rental is not new, and games minting items is standard. What LeaseKey adds is how the lease is enforced.
-
-| Approach | How the renter gets access | What it leaves open |
-|---|---|---|
-| Transfer and trust (Axie-style scholarships) | The item or account is handed over | The renter can keep or misuse it |
-| Collateralized rental (for example reNFT's default mode) | The renter posts collateral worth the item | Shuts out players who cannot afford the item |
-| A "user" role on the token (ERC-4907) or a rental registry (reNFT collateral-free) | A temporary role the game reads | In the ERC-4907 reference flow the lender can reset the user and end the rental early |
-| A game's own rental market (Splinterlands) | Built into that one game | Works only inside that game |
-| **LeaseKey** | A NEAR access key on the item's own account that can only call `use_item` | See below |
-
-What is specific to LeaseKey:
-
-- **The renter's actions are real signed transactions with no wallet and no gas for the player.** The key lives on the item's account, so the item pays.
-- **The owner cannot end a lease early.** There is no revoke, unlist, unwrap or burn path while a lease runs.
-- **The item is an account.** It escrows its own rent and pays the owner and the game itself.
-- **Scarcity and game identity are part of the protocol:** capped item types, editions, and a game recorded on every item.
-
-What LeaseKey shares with the others: the game still has to integrate. Like ERC-4907 and reNFT's collateral-free mode, a lease only matters if the game checks it. The [SDK](sdk/) makes that one call.
-
-## For game developers
-
-```ts
-import { LeaseKey } from "@leasekey/sdk";
-
-const lk = new LeaseKey({ factoryId: "leasekey-lq3d9s.testnet" });
-const access = await lk.canUse(itemId, player, { games: ["your-game.testnet"] });
-if (access.ok) equip(itemId, access.power, access.endsAt);
-```
-
-`npm run sdk:example` runs a full rent, play and return against testnet. [`contracts/arena-game`](contracts/arena-game/src/lib.rs) is a complete game that integrates through LeaseKey's public interface only.
-
-## Target tracks
-
-- **NFTs That Do Something.** The NFT is an account. It owns money, earns rent, pays royalties and hands out scoped access rights by itself.
-- **Games With Real Economies.** The loop is a game first: rent gear, fight, earn a rare reward, rent it out. Scarcity is enforced, repairs are a sink, and players never see a wallet during play.
-- **Social Money.** Rent splits between owner and game on every settlement, and lending needs no collateral or trust, which is the basis for guild and scholarship lending.
-
-## What's next
-
-The design questions behind these are in [docs/DESIGN-QA.md](docs/DESIGN-QA.md).
+## Roadmap
 
 - Publish the SDK to npm.
 - Several royalty receivers per item, for items honoured by more than one game.
@@ -355,4 +313,4 @@ The design questions behind these are in [docs/DESIGN-QA.md](docs/DESIGN-QA.md).
 
 ## License
 
-MIT. Item art is original and CC0. Item designs are original pieces inspired by well-known archetypes, not copies of any franchise's assets. Fonts are Cinzel and Manrope, both under the SIL Open Font License.
+MIT. All item art is original and released under CC0. Fonts are Cinzel and Manrope, under the SIL Open Font License.

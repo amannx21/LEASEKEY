@@ -9,6 +9,7 @@ export type Toast = { id: number; kind: "ok" | "err" | "info"; text: string };
 export type Page = "home" | "market" | "mine" | "arena" | "build";
 const PAGES: Page[] = ["home", "market", "mine", "arena", "build"];
 const pageFromHash = (): Page => {
+  if (new URLSearchParams(window.location.search).get("item")) return "market";
   const h = window.location.hash.slice(1) as Page;
   return PAGES.includes(h) ? h : "home";
 };
@@ -49,7 +50,8 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [page, setPageState] = useState<Page>(pageFromHash);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // ?item=<item account> opens that item's panel, so an item can be shared as a link
+  const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("item"));
   const setPage = useCallback((p: Page) => {
     setPageState(p);
     if (window.location.hash.slice(1) !== p) window.history.pushState(null, "", `#${p}`);
