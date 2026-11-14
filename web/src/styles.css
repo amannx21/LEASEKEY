@@ -635,3 +635,19 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
   .weapon b { font-size: 17px; }
   .score { width: 100%; }
 }
+
+/* ------------------------------------------------------ hero to next section
+   --hp (on <html>): 0 at the top of the page, 1 when the next section reaches the top. The page scrolls
+   normally; these overlays only perform the change. Only transform and opacity animate. */
+.dst { position: fixed; inset: 0; z-index: 14; pointer-events: none; }
+
+/* dust: the hero hands over to its own dust, the heading appears solid once the dust has landed */
+.dst { width: 100vw; height: 100dvh; opacity: 0; }
+[data-ht="dust"] .home > .hero .hero-canvas { opacity: calc(1 - clamp(0, (var(--hp, 0) - 0.03) / 0.04, 1)); }
+[data-ht="dust"] .home > .hero .hero-copy { opacity: calc(1 - clamp(0, (var(--hp, 0) - 0.02) / 0.12, 1)); }
+[data-ht="dust"] .home > .problem h2 { opacity: clamp(0, (var(--hp, 0) - 0.86) / 0.08, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dst { display: none; }
+  [data-ht] .home > .hero .hero-canvas, [data-ht] .home > .hero .hero-copy, [data-ht] .home > .problem h2 { opacity: 1; }
+}

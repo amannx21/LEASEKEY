@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
 import { FACTORY_ID, fmtNear, short, view, type ItemView, copiesOf } from "./near";
 import { HeroSnap } from "./HeroSnap";
@@ -39,8 +39,133 @@ export function Home() {
       <Partners items={c.items} games={games} onPartner={() => c.setPage("build")} />
       <Economy items={c.items} />
       <Featured items={c.items} onOpen={(id) => c.openItem(id)} onAll={() => c.setPage("market")} />
+      <DustOverlay />
     </div>
   );
+}
+
+// ------------------------------------------------------ hero to next section
+// The page scrolls as normal. While the hero scrolls away and the next section scrolls into place, the hero
+// crumbles into its own gold dust and the dust lands as the next heading, so the change ends on that section.
+// --hp on <html> runs 0 -> 1 from the top of the page to the moment that section reaches the top.
+
+function useHeroProgress(onP?: (p: number) => void) {
+  useEffect(() => {
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const next = document.querySelector(".home > .problem") as HTMLElement | null;
+      if (!next) return;
+      const offset = window.innerWidth <= 720 ? 8 : 88;
+      const end = next.getBoundingClientRect().top + window.scrollY - offset;
+      const p = end > 0 ? Math.min(1, Math.max(0, window.scrollY / end)) : 0;
+      document.documentElement.style.setProperty("--hp", p.toFixed(4));
+      onP?.(p);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      cancelAnimationFrame(raf);
+      document.documentElement.style.removeProperty("--hp");
+    };
+  }, [onP]);
+}
+
+/**
+ * Dust: the hero crumbles into the gold dust it was made from, and the dust lands as the next section's
+ * own heading, which then turns solid. Particles follow both elements as the page scrolls.
+ */
+function DustOverlay() {
+  const cv = useRef<HTMLCanvasElement>(null);
+  const parts = useRef<{ sx: number; sy: number; tx: number; ty: number; r: number; g: number; b: number; w: number }[] | null>(null);
+  const built = useRef("");
+  const onP = useCallback((p: number) => {
+    const canvas = cv.current;
+    const hero = document.querySelector(".home > .hero .hero-canvas") as HTMLCanvasElement | null;
+    const head = document.querySelector(".home > .problem h2") as HTMLElement | null;
+    if (!canvas || !hero || !head) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (p <= 0.02 || p >= 0.995) {
+      canvas.style.opacity = "0";
+      if (p <= 0.02) { parts.current = null; built.current = ""; }
+      return;
+    }
+    const hr = hero.getBoundingClientRect(), tr = head.getBoundingClientRect();
+    // the canvas always matches the visible viewport (iOS changes the height as its toolbar slides away)
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    }
+    // particles are relative to the hero and the heading, so only a width change rebuilds them
+    const key = W + ":" + Math.round(tr.width);
+    if (!parts.current || built.current !== key) {
+      const hc = hero.getContext("2d");
+      if (!hc) return;
+      // sources: the hero's own lit pixels, relative to the hero canvas; phones get a lighter budget
+      const img = hc.getImageData(0, 0, hero.width, hero.height).data;
+      const kx = hr.width / hero.width, ky = hr.height / hero.height;
+      const budget = W <= 720 ? 22000 : 60000;
+      const step = Math.max(3, Math.round(Math.sqrt((hero.width * hero.height) / budget)));
+      const src: { x: number; y: number; r: number; g: number; b: number }[] = [];
+      for (let y = 0; y < hero.height; y += step) for (let x = 0; x < hero.width; x += step) {
+        const i = (y * hero.width + x) * 4;
+        if (img[i + 3] > 120) src.push({ x: x * kx, y: y * ky, r: img[i], g: img[i + 1], b: img[i + 2] });
+      }
+      // targets: the next heading drawn exactly as the page lays it out, relative to the heading
+      const cs = getComputedStyle(head);
+      const size = parseFloat(cs.fontSize);
+      const lh = parseFloat(cs.lineHeight) || size * 1.15;
+      const off = document.createElement("canvas");
+      off.width = Math.ceil(tr.width); off.height = Math.ceil(tr.height);
+      const o = off.getContext("2d")!;
+      o.font = `${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+      o.textBaseline = "middle"; o.fillStyle = "#fff";
+      const words = (head.textContent || "").split(/\s+/);
+      let line = "", row = 0;
+      for (const w of words) {
+        const test = line ? line + " " + w : w;
+        if (o.measureText(test).width > tr.width && line) { o.fillText(line, 0, row * lh + lh / 2); line = w; row++; }
+        else line = test;
+      }
+      if (line) o.fillText(line, 0, row * lh + lh / 2);
+      const td = o.getImageData(0, 0, off.width, off.height).data;
+      const tgt: { x: number; y: number }[] = [];
+      const ts = Math.max(2, Math.round(size / 22));
+      for (let y = 0; y < off.height; y += ts) for (let x = 0; x < off.width; x += ts) if (td[(y * off.width + x) * 4 + 3] > 128) tgt.push({ x, y });
+      if (!src.length || !tgt.length) return;
+      parts.current = src.map((s, i) => {
+        const t = tgt[Math.floor((i * tgt.length) / src.length)];
+        return { sx: s.x, sy: s.y, tx: t.x, ty: t.y, r: s.r, g: s.g, b: s.b, w: (Math.sin(i * 12.9898) * 43758.5453) % 1 };
+      });
+      built.current = key;
+    }
+    const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    canvas.style.opacity = String(1 - Math.min(1, Math.max(0, (p - 0.9) / 0.08)));
+    const m = Math.min(1, Math.max(0, (p - 0.05) / 0.8));
+    for (const q of parts.current) {
+      const local = Math.min(1, Math.max(0, m * 1.25 - Math.abs(q.w) * 0.25));
+      const e = local < 0.5 ? 4 * local ** 3 : 1 - (-2 * local + 2) ** 3 / 2;
+      const ax = hr.left + q.sx, ay = hr.top + q.sy;
+      const bx = tr.left + q.tx, by = tr.top + q.ty;
+      const x = ax + (bx - ax) * e + Math.sin(e * Math.PI) * 110 * q.w;
+      const y = ay + (by - ay) * e;
+      ctx.fillStyle = `rgb(${Math.round(q.r + (243 - q.r) * e)},${Math.round(q.g + (234 - q.g) * e)},${Math.round(q.b + (215 - q.b) * e)})`;
+      ctx.fillRect(x, y, 1.8, 1.8);
+    }
+  }, []);
+  useHeroProgress(onP);
+  useEffect(() => {
+    document.documentElement.dataset.ht = "dust";
+    return () => { delete document.documentElement.dataset.ht; };
+  }, []);
+  return <canvas ref={cv} className="dst" aria-hidden="true" />;
 }
 
 // ---------------------------------------------------------------- problem

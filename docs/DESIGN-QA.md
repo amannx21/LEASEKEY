@@ -388,3 +388,9 @@ Why these two: the rental share grows with real usage, and the creation fee grow
 **Answer:** Slime Arena is a demo game. It exists to show a lease working inside a real game: the rented item changes how you fight, every hit is an on-chain `use_item` transaction, the same key cannot steal the item, and when time is up the lease closes and the owner and the game are paid. It is also a separate contract that integrates through LeaseKey's public interface only, exactly as a partner game would.
 
 **Fix:** the Arena now opens with its title and one line saying what it is, followed by "What to watch": Rent, Play, Try to cheat, Time is up, plus a link to add LeaseKey to your own game. The steps fold away during an active lease and start folded on phones, so the game stays in view. The README says the same in the Arena screenshot caption, in "Run it" and next to the live link.
+
+## 41. "Can scrolling down the home page hand over to the next section instead of just cutting to it?"
+
+**Answer:** Yes. The hero is drawn from gold dust, so it goes back to dust: as you scroll, the knight and the hammer break into their own lit particles, the particles drift down and settle into the letters of the next heading ("Lending in-game items has always meant trusting a stranger"), and the heading turns solid as the last grain lands. The page keeps scrolling normally the whole time; nothing pins or opens a separate text screen.
+
+**Fix:** `DustOverlay` in `web/src/Home.tsx` samples the hero canvas's own pixels as sources and rasterises the heading exactly as the page lays it out as targets, then draws the particles on one fixed canvas from a single scroll progress (`--hp`). On phones the canvas follows the visible height while the iOS toolbar slides, only a width change rebuilds the particles, and the particle budget is lighter. With reduced motion the overlay is off and the page scrolls as before.
