@@ -219,18 +219,6 @@ export function Arena() {
             {!session && (
               <button className="primary" onClick={() => c.setPage("market")}>Rent a weapon</button>
             )}
-            {session && item && timeLeft > 0 && usesLeft === 0 && (
-              <button
-                className="primary"
-                disabled={!!c.busy}
-                onClick={async () => {
-                  const s = await c.run("Returning early…", (me) => call<Settlement>(me, item.account_id, "return_early"));
-                  if (s) c.toast("ok", `Returned. Refund ${fmtNear(s.renter_refund, 4)} NEAR for unused time and gas.`);
-                }}
-              >
-                Return it now
-              </button>
-            )}
             {session && item && timeLeft > 0 && usesLeft > 0 && (
               <button
                 disabled={!!c.busy}
@@ -241,6 +229,20 @@ export function Arena() {
                       (BigInt(item.price_per_hour) * 120n) / 3600n + 1n))}
               >
                 +2 min
+              </button>
+            )}
+            {/* hand the item back at any time: the unused time and gas come back to the renter */}
+            {session && item && timeLeft > 0 && (
+              <button
+                className={usesLeft === 0 ? "primary" : ""}
+                disabled={!!c.busy}
+                title="End the lease now. Unused time and gas are refunded to you, the owner and the game are paid for the time used."
+                onClick={async () => {
+                  const s = await c.run("Returning early…", (me) => call<Settlement>(me, item.account_id, "return_early"));
+                  if (s) c.toast("ok", `Returned. Refund ${fmtNear(s.renter_refund, 4)} NEAR for unused time and gas.`);
+                }}
+              >
+                {usesLeft === 0 ? "Return it now" : "Return early"}
               </button>
             )}
             {session && item && timeLeft > 0 && (
