@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  FACTORY_ID, GAS_BUDGET, call, txInFlight, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
+  FACTORY_ID, GAS_BUDGET, call, landed, view, txInFlight, createGuest, forgetGuest, getBalance, loadGuest, loadItems,
   newSessionKey, openWalletModal, getSelector, walletIdentity, errorText,
   type Identity, type ItemView, type Settlement,
 } from "./near";
@@ -169,10 +169,16 @@ export function ChainProvider({ children }: { children: ReactNode }) {
       const ok = await run(`Renting ${item.name}…`, async (who) => {
         const sessionKey = newSessionKey(item.account_id);
         const cost = (BigInt(item.price_per_hour) * BigInt(secs)) / 3600n;
-        await call(who, item.account_id, "rent", {
-          public_key: sessionKey.getPublicKey().toString(),
-          duration_secs: String(secs),
-        }, cost + GAS_BUDGET);
+        try {
+          await call(who, item.account_id, "rent", {
+            public_key: sessionKey.getPublicKey().toString(),
+            duration_secs: String(secs),
+          }, cost + GAS_BUDGET);
+        } catch (e) {
+          // The server may have failed after the lease was already made; the chain decides.
+          const mine = () => view<ItemView>(item.account_id, "get_item").then((i) => i.renter === who.accountId);
+          if (!(await landed(mine))) throw e;
+        }
         return true;
       });
       if (ok) {
@@ -187,9 +193,17 @@ export function ChainProvider({ children }: { children: ReactNode }) {
 
   const endRental = useCallback(
     async (item: ItemView) => {
-      const s = await run(`Settling ${item.name}…`, (who) =>
-        call<Settlement>(who, item.account_id, "end_rental"));
-      if (s) toast("ok", `${item.name} settled: owner and creator paid, session key deleted.`);
+      const s = await run(`Closing the lease on ${item.name}…`, async (who) => {
+        try {
+          return await call<Settlement>(who, item.account_id, "end_rental");
+        } catch (e) {
+          // The server may have failed after the lease was already closed; the chain decides.
+          const closed = () => view<ItemView>(item.account_id, "get_item").then((i) => !i.renter);
+          if (!(await landed(closed))) throw e;
+          return {} as Settlement;
+        }
+      });
+      if (s) toast("ok", `Lease closed: owner and game paid, unused gas budget refunded, ${item.name} is free again.`);
       return s;
     },
     [run, toast],

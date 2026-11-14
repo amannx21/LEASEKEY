@@ -297,3 +297,11 @@ Verified in the browser: the same guest at 0.10 NEAR was refilled, rented the Ae
 **Answer:** when a lease's time runs out, the renter's key still exists on the item until someone closes the lease. Closing calls `end_rental`, which deletes the renter's key, pays the owner their rent, pays the game its royalty, refunds the renter's unused gas budget, and frees the item for the next renter. Anyone can call it, so an owner never depends on the renter showing up.
 
 **Fix:** the wording. The buttons now say "Close lease and pay out" (item page), "Close lease and get paid" (owner) and "Close lease and get my refund" (renter), with one line explaining what happens. The arena closes guests' finished leases automatically, and `scripts/keeper.ts` closes any expired lease on a schedule.
+
+## 31. "Internal server error" when closing a lease
+
+**Answer:** the lease had closed. The public server failed while waiting for the result, after the transaction had already run on chain, so the error was about the server, not the action. Retrying blindly would be worse: a second attempt could run the action twice.
+
+**Fix:** when renting or closing a lease ends in an error, the app asks the chain whether it happened (is this item now leased to me, or is the lease closed) before reporting anything. If it did, the user sees the success message. This also covers pressing "Close lease" on a lease that the arena or the keeper already closed. Automatic retries are now limited to explicit rate-limit refusals, which never reach the chain. "Internal server error" moves reads on to the next server.
+
+Verified: an expired Aegis Plate lease closed from the item panel in about 5 seconds and split the rent between the owner (90%) and the game (10%).

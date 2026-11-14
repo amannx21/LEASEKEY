@@ -43,7 +43,7 @@ const errText = (e: unknown) =>
 
 /** True when a server could not be reached or refused for load, so the request never reached the chain. */
 const isNetworkError = (e: unknown) =>
-  /Failed to fetch|fetch failed|NetworkError|Load failed|RetriesExceeded|timed? ?out|ECONN|Rate limits? exceeded|\b429\b|Too Many Requests|\b50[234]\b|Bad Gateway|Service Unavailable/i
+  /Failed to fetch|fetch failed|NetworkError|Load failed|RetriesExceeded|timed? ?out|ECONN|Rate limits? exceeded|\b429\b|Too Many Requests|Internal server error|\b50[0234]\b|Bad Gateway|Service Unavailable/i
     .test(errText(e));
 
 export const provider = new providers.FailoverRpcProvider(
@@ -173,6 +173,22 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
     readsInFlight -= 1;
     readQueue.shift()?.();
   }
+}
+
+/**
+ * A server can fail while waiting for a result even though the transaction already ran.
+ * Before reporting such an error, ask the chain a few times whether the action took effect.
+ */
+export async function landed(check: () => Promise<boolean>, tries = 5): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    await sleep(1500);
+    try {
+      if (await check()) return true;
+    } catch {
+      // the read failed too; try again
+    }
+  }
+  return false;
 }
 
 export async function view<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -396,7 +412,9 @@ export async function call<T = unknown>(
           });
           return parseOutcome<T>(outcome);
         } catch (e) {
-          if (attempt >= 3 || !isRateLimited(e)) throw e;
+          // Only an explicit rate-limit refusal is retried: the transaction never ran. After any other
+          // server error it may already be on chain, and a new attempt could run the action twice.
+          if (attempt >= 3 || !/Rate limits? exceeded|\b429\b|Too Many Requests/i.test(errText(e))) throw e;
           await sleep(1500 * (attempt + 1));
         }
       }
