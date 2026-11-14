@@ -209,7 +209,7 @@ LeaseKey's difference: the renter acts through a real key with no wallet and no 
 ## Questions you might ask
 
 <details>
-<summary><b>Twelve questions, short answers</b></summary>
+<summary><b>Thirteen questions, short answers</b></summary>
 
 <br>
 
@@ -226,6 +226,8 @@ LeaseKey's difference: the renter acts through a real key with no wallet and no 
 **What stops the renter from keeping the item?** The renter never holds it. They get a key that can only call `use_item` on that one account, and the item refuses it after expiry.
 
 **What stops the owner from pulling the item mid-lease?** The item contract has no way to unlist, reprice, revoke or unwrap during a lease. Paid time is the renter's.
+
+**What if LeaseKey disappears?** Every item keeps working. Its contract is locked by its hash, so once an item is made nobody can change its rules, including us, and anyone can close an expired lease to trigger the payouts. The one upgradable piece is the factory that creates new items; moving its upgrades to a DAO is on the roadmap.
 
 **Who pays the owner when time is up?** Anyone can close a finished lease. The arena does it for its players, a keeper script does it on a schedule, and the next renter's rent closes it automatically.
 
