@@ -598,3 +598,18 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
 .hint-touch { display: none; }
 @media (pointer: coarse) { .hint-fine { display: none; } .hint-touch { display: inline; } }
 @media (max-width: 720px) { .who-id a, .who-id .acct { max-width: 30vw; } .who button.small { padding: 7px 10px; } }
+
+/* arena: what this demo is, before the game */
+.arena-intro { grid-column: 1 / -1; display: grid; gap: 6px; margin-bottom: 4px; }
+.arena-intro h1 { font-size: clamp(32px, 4.4vw, 48px); margin: 0; }
+.arena-intro .lede { margin: 0; font-size: 17px; }
+.arena-steps { margin-top: 8px; }
+.arena-steps summary { cursor: pointer; width: fit-content; font-weight: 800; font-size: 14px; color: var(--gold-2); padding: 4px 0; list-style-position: inside; }
+.arena-steps ol { list-style: none; counter-reset: step; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0; margin: 8px 0 10px; }
+.arena-steps li { counter-increment: step; display: grid; gap: 4px; align-content: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--well); }
+.arena-steps li b { font-size: 14.5px; display: flex; gap: 8px; align-items: baseline; }
+.arena-steps li b::before { content: counter(step); font-family: var(--body); font-weight: 800; color: var(--gold); font-size: 14px; font-variant-numeric: tabular-nums; }
+.arena-steps li span { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.arena-steps .link { font-size: 13.5px; }
+@media (max-width: 1000px) { .arena-steps ol { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .arena-steps ol { grid-template-columns: 1fr; gap: 8px; } .arena-steps li { padding: 10px 12px; } .arena-intro .lede { font-size: 15.5px; } }

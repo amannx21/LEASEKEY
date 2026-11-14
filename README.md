@@ -34,7 +34,7 @@ The owner keeps the item. The renter gets a key that can only use it, for exactl
   </tr>
   <tr>
     <td><b>Every item, in full.</b> Stats from its game, how many will ever exist, who owns it, and its own on-chain account. Pick a length and rent.</td>
-    <td><b>Play with it.</b> Each strike is a real transaction, signed in the background. Try to steal the item with the same key and the chain refuses.</td>
+    <td><b>Slime Arena, the demo game.</b> It exists to show a lease working inside a real game: the rented bow fires, every shot is a real <code>use_item</code> transaction, the same key cannot steal the item, and when time is up the owner and the game are paid.</td>
   </tr>
 </table>
 
@@ -105,7 +105,7 @@ npm --prefix web install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Play as guest**, rent something in the **Armory**, and fight in the **Arena**. Guest mode creates a free testnet account for you, so no wallet is needed.
+Open http://localhost:5173, click **Play as guest**, rent something in the **Armory**, and fight with it in the **Arena**, a small demo game that shows the lease working from start to finish. Guest mode creates a free testnet account for you, so no wallet is needed.
 
 <details>
 <summary><b>Build, test and deploy the contracts</b></summary>
@@ -185,7 +185,7 @@ if (access.ok) equip(itemId, access.power, access.endsAt);
 
 ## Live on testnet
 
-**Try it: [leasekey.vercel.app](https://leasekey.vercel.app)**. Click "Play as guest" for a free throwaway testnet account, rent anything in the Armory and fight in the Arena. No wallet needed.
+**Try it: [leasekey.vercel.app](https://leasekey.vercel.app)**. Click "Play as guest" for a free throwaway testnet account, rent anything in the Armory and take it into the Arena, the demo game where you watch the lease work on chain. No wallet needed.
 
 | | Account |
 |---|---|

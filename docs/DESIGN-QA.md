@@ -382,3 +382,9 @@ Tests: `renter_resets_a_lost_key_then_owner_retires_the_item` plus the fee in th
 The creation fee is part of `mint_deposit`, so games, the Arena's rewards and wrapping pay it automatically, and a failed creation refunds it with the rest. The factory counts it on chain: `get_earnings` returns the fee, the rental share and the totals. The developer page has a "Who earns what" calculator (items, price, hours leased, royalty) with the live counter. Test: the earnings assertions in `open_supply_for_random_drops_then_seal_it`.
 
 Why these two: the rental share grows with real usage, and the creation fee grows with the catalogue, which covers LeaseKey's costs even before an item is first rented. Both are small enough that listing on LeaseKey stays cheaper than building a rental system.
+
+## 40. "What is the Arena really for? Nothing on the site says it showcases how a lease works in a game"
+
+**Answer:** Slime Arena is a demo game. It exists to show a lease working inside a real game: the rented item changes how you fight, every hit is an on-chain `use_item` transaction, the same key cannot steal the item, and when time is up the lease closes and the owner and the game are paid. It is also a separate contract that integrates through LeaseKey's public interface only, exactly as a partner game would.
+
+**Fix:** the Arena now opens with its title and one line saying what it is, followed by "What to watch": Rent, Play, Try to cheat, Time is up, plus a link to add LeaseKey to your own game. The steps fold away during an active lease and start folded on phones, so the game stays in view. The README says the same in the Arena screenshot caption, in "Run it" and next to the live link.

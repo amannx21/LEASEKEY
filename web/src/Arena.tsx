@@ -168,6 +168,24 @@ export function Arena() {
   const look = equip?.look ?? null;
   return (
     <section className="arena" style={look ? { ["--c1" as string]: look.colors[0], ["--c2" as string]: look.colors[1] } : undefined}>
+      <div className="arena-intro">
+        <h1>Slime Arena</h1>
+        <p className="lede">
+          A small demo game that shows how any game uses LeaseKey. Rent an item in the Armory, fight with it here, and
+          watch the lease work on chain from start to finish.
+        </p>
+        {/* folded while a lease is running, and on phones, so the game stays in view */}
+        <details className="arena-steps" open={!equip?.onChain && !window.matchMedia("(max-width: 720px)").matches}>
+          <summary>What to watch</summary>
+          <ol>
+            <li><b>Rent</b><span>Pick gear in the Armory. Your lease gives this browser a key that can only play that one item.</span></li>
+            <li><b>Play</b><span>Every hit is a <code>use_item</code> transaction on NEAR, listed in the feed. No wallet pop-ups: the item pays the gas.</span></li>
+            <li><b>Try to cheat</b><span>The same key cannot move the item, unlist it or take its earnings. The chain refuses all three.</span></li>
+            <li><b>Time is up</b><span>The weapon stops working, the lease closes, and the owner and the game are paid automatically.</span></li>
+          </ol>
+          <button className="link" onClick={() => c.setPage("build")}>Add this to your own game</button>
+        </details>
+      </div>
       <div className="arena-main">
         <div className="loadout">
           <div className={`weapon ${equip ? "live" : "dead"}`}>
