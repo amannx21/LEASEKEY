@@ -126,35 +126,50 @@ async fn wrap_any_nft_rent_it_then_unwrap_it() -> anyhow::Result<()> {
             .deposit(NearToken::from_yoctonear(1)).max_gas().transact()
     };
 
-    // Without prepaid wrap credit the NFT bounces straight back.
-    wrap(msg.clone()).await?.into_result()?;
-    assert_eq!(owner_of(&worker, other_game.id().clone(), tid.clone()).await?, player.id().as_str());
-
+    let held_by = |who: String| {
+        let (w, c, t) = (worker.clone(), other_game.id().clone(), tid.clone());
+        async move { anyhow::Ok(assert_eq!(owner_of(&w, c, t).await?, who)) }
+    };
     let dep = mint_deposit(&f).await?;
     player.call(f.id(), "deposit_for_wrap").deposit(dep).transact().await?.into_result()?;
+
+    // A collection that is not an integrated game cannot be wrapped: the NFT bounces straight back.
+    wrap(msg.clone()).await?.into_result()?;
+    held_by(player.id().to_string()).await?;
+
+    // Integrated, but the game has not put this item in its catalogue yet: still bounced, deposit untouched.
+    other_game.as_account().call(f.id(), "register_game").args_json(json!({ "name": "Ember Realms" }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+    wrap(msg.clone()).await?.into_result()?;
+    held_by(player.id().to_string()).await?;
+    let credit: String = f.view("get_wrap_credit").args_json(json!({ "account_id": player.id() })).await?.json()?;
+    assert_eq!(credit, dep.as_yoctonear().to_string());
+
+    // The game defines the item once, with its stats. Now wrapping works and the stats come from the game.
+    other_game.as_account().call(f.id(), "define_item_type")
+        .args_json(json!({ "type_id": "Ember Greataxe", "name": "Ember Greataxe", "image": "flame-sword.svg", "power": 44, "max_supply": 100,
+            "stats": [{ "name": "attack", "value": 44 }, { "name": "defence", "value": 9 }] }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
     wrap(msg).await?.into_result()?;
-    // The original now sits in LeaseKey's escrow, and a rentable item exists.
-    assert_eq!(owner_of(&worker, other_game.id().clone(), tid.clone()).await?, f.id().as_str());
+    held_by(f.id().to_string()).await?;
     let found: Value = f.view("find_wrapped")
         .args_json(json!({ "origin_contract": other_game.id(), "origin_token_id": tid })).await?.json()?;
     assert_eq!(found["owner"], json!(player.id()));
     assert_eq!(found["origin"]["contract"], json!(other_game.id()));
     assert_eq!(found["game"], json!(other_game.id()));
+    assert_eq!(found["game_name"], "Ember Realms");
     let item: AccountId = found["item_account"].as_str().unwrap().parse()?;
     let v: Value = worker.view(&item, "get_item").await?.json()?;
     assert_eq!(v["creator"], json!(other_game.id()), "the origin collection earns the royalty");
-    // The owner asked for power 50 in the wrap message. It is ignored: owners cannot rate their own items.
-    assert_eq!(v["power"], 25);
-    assert_eq!(found["stats"].as_array().unwrap().len(), 0);
-    let rating = json!({ "token_id": found["token_id"], "stats": [{ "name": "attack", "value": 44 }, { "name": "defence", "value": 9 }] });
-    let r = player.call(f.id(), "rate_wrapped").args_json(rating.clone()).transact().await?;
-    assert!(r.is_failure(), "an owner rated their own wrapped item");
-    // The original game rates it, once.
-    other_game.as_account().call(f.id(), "rate_wrapped").args_json(rating.clone()).transact().await?.into_result()?;
-    let rated: Value = f.view("get_item_ref").args_json(json!({ "token_id": found["token_id"] })).await?.json()?;
-    assert_eq!(rated["stats"][0]["value"], 44);
-    let r = other_game.as_account().call(f.id(), "rate_wrapped").args_json(rating).transact().await?;
-    assert!(r.is_failure(), "a rating was changed");
+    // The owner asked for power 50 in the wrap message. The game's catalogue says 44, and the game wins.
+    assert_eq!(v["power"], 44);
+    assert_eq!(v["name"], "Ember Greataxe");
+    assert_eq!(found["stats"][0]["name"], "attack");
+    assert_eq!(found["stats"][0]["value"], 44);
+    // Nobody can re-rate it afterwards, least of all the owner.
+    let rating = json!({ "token_id": found["token_id"], "stats": [{ "name": "attack", "value": 999 }] });
+    assert!(player.call(f.id(), "rate_wrapped").args_json(rating.clone()).transact().await?.is_failure());
+    assert!(other_game.as_account().call(f.id(), "rate_wrapped").args_json(rating).transact().await?.is_failure());
 
     // It rents like any item.
     player.call(&item, "list").args_json(json!({})).transact().await?.into_result()?;

@@ -38,8 +38,18 @@ pub const ITEM_FLOAT: u128 = 150_000_000_000_000_000_000_000; // 0.15 NEAR
 pub const NFT_STORAGE: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
 /// Deposit to register a game (pays for its registry entry).
 pub const GAME_DEPOSIT: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
-/// Power of a wrapped item until its original game rates it.
-pub const WRAP_BASE_POWER: u32 = 25;
+const WRAP_VIEW_GAS: Gas = Gas::from_tgas(5);
+const WRAP_LOOKUP_GAS: Gas = Gas::from_tgas(60);
+
+/// The part of a NEP-171 token the wrap needs: what the item is, as told by its own collection.
+#[near(serializers = [json])]
+pub struct OriginToken {
+    pub metadata: Option<OriginMetadata>,
+}
+#[near(serializers = [json])]
+pub struct OriginMetadata {
+    pub title: Option<String>,
+}
 /// Storage price: 1 NEAR per 100kb.
 const YOCTO_PER_BYTE: u128 = 10_000_000_000_000_000_000;
 
@@ -140,7 +150,8 @@ pub struct MintArgs {
 /// `msg` of `nft_transfer_call` when wrapping an NFT.
 #[near(serializers = [json])]
 pub struct WrapArgs {
-    pub name: String,
+    /// Ignored: the name comes from the game's catalogue.
+    pub name: Option<String>,
     pub image: Option<String>,
     pub power: Option<u32>,
     pub price_per_hour: U128,
@@ -619,9 +630,9 @@ impl LeaseKey {
         false // keep it in escrow
     }
 
-    /// The original game rates a wrapped item: only the account of the NFT's
-    /// own collection may call this, and only once. Owners cannot rate their
-    /// own items, so stats shown on LeaseKey always come from a game.
+    /// Fallback for a catalogue entry defined without stats: the original
+    /// game may rate that wrapped item once. Owners can never rate their own
+    /// items, so stats shown on LeaseKey always come from a game.
     pub fn rate_wrapped(&mut self, token_id: TokenId, stats: Vec<Stat>) {
         let origin = self.origins.get(&token_id).unwrap_or_else(|| env::panic_str("not a wrapped item"));
         require!(
@@ -854,6 +865,11 @@ impl NonFungibleTokenReceiver for LeaseKey {
             log!("LeaseKey items cannot be wrapped again");
             return PromiseOrValue::Value(true);
         }
+        // LeaseKey only rents items of integrated games: the collection must be a registered game.
+        if !self.games.contains_key(&origin_contract) {
+            log!("{} is not a registered LeaseKey game", origin_contract);
+            return PromiseOrValue::Value(true);
+        }
         let args: WrapArgs = match near_sdk::serde_json::from_str(&msg) {
             Ok(a) => a,
             Err(_) => {
@@ -861,37 +877,84 @@ impl NonFungibleTokenReceiver for LeaseKey {
                 return PromiseOrValue::Value(true);
             }
         };
-        if args.name.is_empty() || args.name.len() > 48 || args.image.as_ref().is_some_and(|i| i.len() > 256) {
-            log!("bad name or image");
-            return PromiseOrValue::Value(true);
-        }
         let required = self.mint_deposit().0;
-        let credit = self.wrap_credit.get(&previous_owner_id).copied().unwrap_or(0);
-        if credit < required {
+        if self.wrap_credit.get(&previous_owner_id).copied().unwrap_or(0) < required {
             log!("call deposit_for_wrap with {} yoctoNEAR first", required);
             return PromiseOrValue::Value(true);
         }
-        if credit == required {
-            self.wrap_credit.remove(&previous_owner_id);
-        } else {
-            self.wrap_credit.insert(previous_owner_id.clone(), credit - required);
+        // Ask the collection itself what this item is. The owner's word is not used.
+        PromiseOrValue::Promise(
+            Promise::new(origin_contract.clone())
+                .function_call(
+                    "nft_token".to_string(),
+                    json!({ "token_id": token_id }).to_string().into_bytes(),
+                    NearToken::from_yoctonear(0),
+                    WRAP_VIEW_GAS,
+                )
+                .then(Self::ext(env::current_account_id()).with_static_gas(WRAP_LOOKUP_GAS).on_wrap_lookup(
+                    previous_owner_id,
+                    origin_contract,
+                    token_id,
+                    args.price_per_hour,
+                    args.max_secs,
+                    args.royalty_bps,
+                )),
+        )
+    }
+}
+
+#[near]
+impl LeaseKey {
+    /// The collection told us the item's title. Its game's catalogue (an item
+    /// type whose id is the slug of that title) supplies the name, art, power
+    /// and stats. Returns `true` to bounce the NFT if the game has not
+    /// defined the item.
+    #[private]
+    pub fn on_wrap_lookup(
+        &mut self,
+        owner: AccountId,
+        origin_contract: AccountId,
+        origin_token_id: TokenId,
+        price_per_hour: U128,
+        max_secs: Option<U64>,
+        royalty_bps: Option<u16>,
+        #[callback_result] token: Result<Option<OriginToken>, PromiseError>,
+    ) -> PromiseOrValue<bool> {
+        let title = token.ok().flatten().and_then(|t| t.metadata).and_then(|m| m.title);
+        let Some(title) = title else {
+            log!("the collection did not describe this token");
+            return PromiseOrValue::Value(true);
+        };
+        let key = type_key(&origin_contract, &slug(&title));
+        let Some(t) = types_map().get(&key) else {
+            log!("{} has not defined an item type for \"{}\"", origin_contract, title);
+            return PromiseOrValue::Value(true);
+        };
+        let required = self.mint_deposit().0;
+        let credit = self.wrap_credit.get(&owner).copied().unwrap_or(0);
+        if credit < required {
+            return PromiseOrValue::Value(true);
         }
+        if credit == required {
+            self.wrap_credit.remove(&owner);
+        } else {
+            self.wrap_credit.insert(owner.clone(), credit - required);
+        }
+        let stats = stats_map().get(&key).unwrap_or_default();
         let item = NewItem {
             edition: None,
-            name: args.name,
-            image: args.image.unwrap_or_default(),
-            power: WRAP_BASE_POWER,
-            price_per_hour: args.price_per_hour,
-            max_secs: args.max_secs.unwrap_or(U64(7200)),
-            royalty_bps: args.royalty_bps.unwrap_or(0),
-            owner: previous_owner_id,
+            name: t.name,
+            image: t.image,
+            power: t.power,
+            price_per_hour,
+            max_secs: max_secs.unwrap_or(U64(7200)),
+            royalty_bps: royalty_bps.unwrap_or(0),
+            owner,
             creator: origin_contract.clone(),
             max_durability: 1000,
-            description: format!("Wrapped from {origin_contract} #{token_id}. Rentable on LeaseKey."),
+            description: format!("Wrapped from {origin_contract} #{origin_token_id}. Rentable on LeaseKey."),
         };
-        let origin = Origin { contract: origin_contract, token_id };
-        // `power` and `stats` in the wrap message are ignored: an owner must not rate their own item.
-        let stats: Vec<Stat> = Vec::new();
+        let origin = Origin { contract: origin_contract, token_id: origin_token_id };
         PromiseOrValue::Promise(self.create_item(item, required, required, Some((origin, stats)), None))
     }
 }
