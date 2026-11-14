@@ -17,7 +17,7 @@
 | 3 | 0:25 | B | **Armory**. Point at editions, stats and the game label. Open the one-of-a-kind item, then open a cheaper one, choose **2 min**, **Rent and fight**. | "Every item shows its game, its stats and how many exist. The renter pays rent and a small gas budget. No collateral, and the item never leaves its owner." |
 | 4 | 0:40 | B | The Arena opens. Press Space repeatedly. Point at the on-chain feed. | "Every strike is a real transaction signed by a key in this browser. No wallet pop-ups, and the item pays its own gas." |
 | 5 | 0:52 | B | Under **Try to cheat**, click all three buttons. | "Same key, trying to steal. NEAR rejects it: this key can only play." |
-| 6 | 1:00 | B | Keep striking until the **Loot roll** bar reaches 20, then **Roll for a drop**. | "Playing earns a roll for a rare item of your own. Supply is capped on chain, so what you win stays scarce, and you can rent it out." |
+| 6 | 1:00 | B | Keep striking until the **Loot roll** bar reaches 20, then **Roll for a drop**. | "The game rewards its player with a rare item, the way any partner game would. Supply is capped on chain, so it stays scarce, and the player can rent it out through LeaseKey." |
 | 7 | 1:12 | A | **My Items**, on a leased item click **Try to unlist (will be rejected)**. | "The owner cannot pull the item back mid-lease either." |
 | 8 | 1:18 | B | Wait for the countdown. The item drops from the hero's hand and the settlement line appears. | "Time is up. The item stops working, the lease settles on chain, and the key is deleted." |
 | 9 | 1:26 | A | **My Items** shows earnings. Landing page, "An economy games plug into" table. | "The owner earned rent and the game earned its royalty. Nobody trusted anybody." |

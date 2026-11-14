@@ -268,9 +268,10 @@ export function Arena() {
         {session && item && item.game === HOUSE_GAME && (
           <div className={`loot ${drop?.won ? "won" : ""}`}>
             <div className="loot-head">
-              <b>Loot roll</b>
+              <b>LeaseKey Arena reward</b>
               <span className="muted">
-                Land {DROP_MIN} on-chain strikes in one lease to earn a roll for a rare item of your own.
+                This demo game rewards its own players: land {DROP_MIN} strikes in one lease to roll for a rare item.
+                Handing out items is always the game's job. LeaseKey only makes them rentable.
               </span>
             </div>
             {drop ? (

@@ -208,3 +208,13 @@ Consequences: an item from Game A does nothing in Game B unless B opts in by add
 5. **Bridge to existing games.** A player can deposit any NEP-171 token from another collection, and LeaseKey issues a rentable token backed by it, redeemable for the original.
 
 What the NFT is not used for: it is never transferred to a renter. Renting uses an access key on the item's account, and that is the whole point.
+
+## 22. Isn't giving out items the game's job, not LeaseKey's?
+
+**Answer:** yes. Games decide how items are earned and mint them to their players; only registered games can mint. LeaseKey never hands out items. It only makes the items games create rentable.
+
+The loot roll is the demo game "LeaseKey Arena" rewarding its own players, as a stand-in for a partner game's boss drop or quest reward. It shows the full loop: a game rewards a player, the player owns a scarce item, the player rents it out.
+
+**Fix:** the Arena panel, README and demo script now label it as the demo game's reward and state that handing out items is the game's job.
+
+**Remaining gap:** the reward logic sits in the factory contract because the demo game shares the factory's account. The clean design is a separate game contract with its own account that calls the standard `mint`. That is a refactor for after the hackathon.

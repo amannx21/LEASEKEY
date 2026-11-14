@@ -175,7 +175,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
 | Rent guided by scarcity | My Items: "Suggest" price from supply and power |
-| Rare items are earned by play: 20 on-chain strikes in a lease earn one loot roll for a capped item | test `playing_earns_a_loot_roll_that_can_drop_a_capped_item`; Arena "Loot roll"; `npx tsx scripts/drop-check.ts` |
+| The demo game rewards its own players, as any partner game would: 20 on-chain strikes in a lease earn one roll for a capped item. LeaseKey itself never hands out items | test `playing_earns_a_loot_roll_that_can_drop_a_capped_item`; Arena "Loot roll"; `npx tsx scripts/drop-check.ts` |
 | Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
 | Owner and game shown on every item; "Mine" filter | Armory page |
@@ -232,6 +232,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
 - Wrapping costs the same as a mint and is prepaid with `deposit_for_wrap`, because an NFT transfer carries no NEAR. Unused credit can be withdrawn.
 - Items store a generic `power` and durability. Game-specific stats stay with the game, or in the original NFT for wrapped items.
+- The loot roll belongs to the demo game "LeaseKey Arena", not to the platform. It lives in the factory contract only because the demo game shares the factory's account. A real partner game runs its own reward logic and calls `mint`.
 - Loot rolls prove paid play, not skill: the contract counts on-chain strikes, which a script could send. Drops are bounded by the supply caps and paid from the house game's treasury.
 - The session key's gas allowance covers roughly eight strikes in flight at once. Faster bursts fail until earlier ones confirm.
 - Not audited. Testnet only.
