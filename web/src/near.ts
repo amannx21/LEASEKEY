@@ -380,7 +380,7 @@ export class Session {
       this.keyPair.getPublicKey(),
       receiverId,
       this.nonce,
-      [actionCreators.functionCall(methodName, args, 10n * TGAS, deposit)],
+      [actionCreators.functionCall(methodName, args, 5n * TGAS, deposit)],
       this.blockHash!,
     );
     const [, signed] = await this.signer.signTransaction(tx);

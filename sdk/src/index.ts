@@ -337,7 +337,7 @@ export class LeaseSession {
       this.keyPair.getPublicKey(),
       this.itemId,
       this.nonce,
-      [actionCreators.functionCall("use_item", { action }, 10n * TGAS, 0n)],
+      [actionCreators.functionCall("use_item", { action }, 5n * TGAS, 0n)],
       this.blockHash!,
     );
     const [, signed] = await this.signer.signTransaction(tx);
