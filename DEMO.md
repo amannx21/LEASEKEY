@@ -5,33 +5,35 @@
 - `npm run dev`, open http://localhost:5173 in **two browser profiles** (or one normal and one incognito window). Each gets its own guest account.
 - Window A is the **owner**. Window B is the **renter**.
 - In both windows click **Play as guest** and wait for the account name to appear.
-- Keep a tab open on https://testnet.nearblocks.io for the explorer shot.
+- In window A, prepare an item to lend: **My Items**, **Bring an item from another game**, **Claim Ember Greataxe**, select it, **Wrap and make rentable**. This takes about 20 seconds, so do it before recording.
 - Optional: `npm run keeper` in a terminal, so expired leases settle even if the renter closes the tab.
 
 ## Shots
 
 | # | Time | Window | Action | What to say |
 |---|---|---|---|---|
-| 1 | 0:00 | A | **My Items**, name the item "Flame Sword", click **Mint and list**. Click the item's account link to open it on the explorer. | "Minting creates the NFT and its own NEAR account. The sword is an account. It has no owner key, only code." |
-| 2 | 0:15 | A | In the item row set the price to `0.1` NEAR/hr and click **Update price**. | "The owner lists it at 0.1 NEAR per hour." |
-| 3 | 0:25 | B | **Marketplace**, click **Rent** on that sword, choose **2 min**, confirm. | "The renter pays rent and a small gas budget. No collateral. The NFT does not move. The sword's account adds a key for this browser that can only call use_item." |
-| 4 | 0:40 | B | The Slime Arena opens. Press Space repeatedly. Point at the on-chain feed filling with transactions. | "Every strike is a real transaction, signed by the session key. No wallet pop-ups, and the sword pays its own gas." |
-| 5 | 0:55 | B | Under **Try to cheat** click **Transfer the NFT to myself**, then the other two buttons. | "Same key, trying to steal. The NEAR protocol rejects it: this key can only play." |
-| 5b | 1:05 | A | **My Items**, click **Try to unlist (will be rejected)**. | "The owner cannot rug the renter either. No unlist, no revoke, until the lease ends." |
-| 6 | 1:10 | B | Wait for the countdown to hit zero. The sword disappears and the banner reads "Your lease on Flame Sword ended". The settlement line appears. | "Time is up. The sword stops, the rental settles on chain, the key is deleted." |
-| 7 | 1:20 | A | **My Items** shows earnings on the sword. | "The owner earned rent, the game creator got a royalty, the renter got unused gas back. Nobody trusted anybody." |
+| 1 | 0:00 | A | Reload the landing page and let the hammer strike play. Scroll to "Every item knows which game it belongs to". | "LeaseKey is a rental layer for blockchain games. Games create scarce items, players own them, and each item is its own NEAR account." |
+| 2 | 0:12 | A | **My Items**. Show the wrapped Ember Greataxe. Click **Suggest**, then **List for rent**. Click the item's account link to show it on the explorer. | "This player owns an item from another game. They wrapped it, and now it has its own account. They list it at a price based on how scarce it is." |
+| 3 | 0:25 | B | **Armory**. Point at editions, stats and the game label. Open the one-of-a-kind item, then open a cheaper one, choose **2 min**, **Rent and fight**. | "Every item shows its game, its stats and how many exist. The renter pays rent and a small gas budget. No collateral, and the item never leaves its owner." |
+| 4 | 0:40 | B | The Arena opens. Press Space repeatedly. Point at the on-chain feed. | "Every strike is a real transaction signed by a key in this browser. No wallet pop-ups, and the item pays its own gas." |
+| 5 | 0:52 | B | Under **Try to cheat**, click all three buttons. | "Same key, trying to steal. NEAR rejects it: this key can only play." |
+| 6 | 1:00 | B | Keep striking until the **Loot roll** bar reaches 20, then **Roll for a drop**. | "Playing earns a roll for a rare item of your own. Supply is capped on chain, so what you win stays scarce, and you can rent it out." |
+| 7 | 1:12 | A | **My Items**, on a leased item click **Try to unlist (will be rejected)**. | "The owner cannot pull the item back mid-lease either." |
+| 8 | 1:18 | B | Wait for the countdown. The item drops from the hero's hand and the settlement line appears. | "Time is up. The item stops working, the lease settles on chain, and the key is deleted." |
+| 9 | 1:26 | A | **My Items** shows earnings. Landing page, "An economy games plug into" table. | "The owner earned rent and the game earned its royalty. Nobody trusted anybody." |
 
 ## If something goes wrong on camera
 
 - **"Rate limits exceeded"**: public testnet RPC throttling. Wait 30 seconds, or set `VITE_RPC_URL` in `web/.env.local` to your own endpoint and restart `npm run dev`.
-- **Faucet refuses a guest account**: use the pre-seeded items instead of minting. Window A can be skipped, since the Marketplace already has five listed items.
-- **Lease shows "awaiting settlement"**: click **Settle lease**, or run `npm run keeper -- --once`.
+- **A strike fails with an allowance error**: you clicked faster than transactions confirm. Pause a second and continue.
+- **No drop**: 60% of rolls miss. Each lease gets one roll, so rent again, or run `npx tsx scripts/drop-check.ts` beforehand to see a win in the terminal.
+- **Lease shows "Lease ended"**: click **Settle the lease** in the item panel, or run `npm run keeper -- --once`.
 
 ## X post draft
 
-> Built at NEAR HACKATHON: LeaseKey, game items that rent themselves out.
+> Built at NEAR HACKATHON: LeaseKey, a rental layer for blockchain games.
 >
-> Every item NFT is its own NEAR account. Renting adds a session key that can only call use_item. No collateral, no trust, no wallet pop-ups while you play. When the lease ends, the sword stops and the rent splits on chain.
+> Every in-game item is its own NEAR account. Rent it with no collateral: you get a session key that can only use the item, the owner keeps ownership, and rent splits on chain between the owner and the game. Supply caps keep rare items rare.
 >
 > @NEARProtocol #NEARHackathon
 >

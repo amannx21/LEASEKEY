@@ -47,16 +47,19 @@ The IDs are also in [`web/src/deployment.json`](web/src/deployment.json) and [`.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant O as Owner
+    participant G as Game
+    participant O as Owner (player)
     participant F as Factory (NEP-171)
     participant I as Item account
     participant R as Renter wallet
     participant K as Session key (browser)
     participant A as Anyone / keeper
 
-    O->>F: mint(name, price, royalty)
+    G->>F: register_game, define_item_type(stats, max_supply)
+    G->>F: mint(item_type) to a player, or the player earns it as a loot drop
     F->>I: create sub-account, attach item code, init
-    F-->>O: NFT minted to owner
+    F-->>O: NFT edition minted to the player
+    Note over O,F: or: the player wraps an NFT they already own
     O->>I: list(price_per_hour)
     R->>I: rent(public_key, duration) + rent + gas budget
     I->>I: add function-call key (use_item only)
@@ -69,7 +72,7 @@ sequenceDiagram
     A->>I: end_rental()
     I->>I: delete session key
     I-->>O: owner share of rent
-    I-->>F: creator royalty
+    I-->>G: game royalty
     I-->>R: unused gas budget
 ```
 
@@ -120,7 +123,7 @@ This rents an item for 60 seconds with a fresh throwaway account, strikes three 
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
-cd tests && cargo test         # 16 sandbox integration tests
+cd tests && cargo test         # 17 sandbox integration tests
 cd .. && cargo test            # unit tests for the rent, refund and split math
 ```
 
@@ -172,6 +175,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
 | Rent guided by scarcity | My Items: "Suggest" price from supply and power |
+| Rare items are earned by play: 20 on-chain strikes in a lease earn one loot roll for a capped item | test `playing_earns_a_loot_roll_that_can_drop_a_capped_item`; Arena "Loot roll"; `npx tsx scripts/drop-check.ts` |
 | Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
 | Owner and game shown on every item; "Mine" filter | Armory page |
@@ -228,6 +232,8 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
 - Wrapping costs the same as a mint and is prepaid with `deposit_for_wrap`, because an NFT transfer carries no NEAR. Unused credit can be withdrawn.
 - Items store a generic `power` and durability. Game-specific stats stay with the game, or in the original NFT for wrapped items.
+- Loot rolls prove paid play, not skill: the contract counts on-chain strikes, which a script could send. Drops are bounded by the supply caps and paid from the house game's treasury.
+- The session key's gas allowance covers roughly eight strikes in flight at once. Faster bursts fail until earlier ones confirm.
 - Not audited. Testnet only.
 
 ## Target tracks
@@ -242,6 +248,8 @@ See [docs/DESIGN-QA.md](docs/DESIGN-QA.md) for the design questions behind these
 
 - Publish the SDK to npm.
 - Several royalty receivers per item, for items honoured by more than one game.
+- A protocol fee on settlement, so LeaseKey itself is sustainable.
+- A second playable game, to show cross-game rules from both sides.
 - Renter reputation with a minimum-reputation setting per listing.
 - Gasless renting through meta transactions (NEP-366) and a relayer, so the renter needs no NEAR at all.
 - Guild pools owned by a Sputnik DAO, with a rent share to the treasury.

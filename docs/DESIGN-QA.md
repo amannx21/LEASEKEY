@@ -190,3 +190,21 @@ Every Armory card and item panel also shows the item's game.
 Consequences: an item from Game A does nothing in Game B unless B opts in by adding A to its accepted list. Wrapped NFTs stay linked to their original collection, and a game can find the wrapper of its own NFT with `find_wrapped`.
 
 **Remaining gap:** the demo has one playable game. Ember Realms is a second collection without its own game, so cross-game rules are shown by the Arena refusing foreign items, not by a second game accepting its own.
+
+## 20. The earning loop is now real
+
+**Gap (from entry 17):** items reached players only through a seed script.
+
+**Fix:** loot drops, fully on chain with no server. A renter who lands 20 on-chain strikes with a house item in one lease earns one roll (`claim_drop`). A win mints the next edition of a capped item type to the player, paid by the game's treasury. Scarcer types are less likely and a sold-out type can never drop. The winner owns the item and can rent it out. Test: `playing_earns_a_loot_roll_that_can_drop_a_capped_item`. Verified on testnet: a fresh player won Flame Sword edition 2 of 5.
+
+**Limit:** the contract counts strikes, which proves paid play, not skill. A real game would sign drops from its server after judging the play.
+
+## 21. How exactly is the NFT used in the project?
+
+1. **Ownership record.** Each item is a NEP-171 token on the factory contract. The token says who owns the item, and standard wallets and explorers can read it.
+2. **Control of the item's account.** Each token has a matching NEAR account that holds the rent and the lease. Whoever owns the token controls that account's listing and receives its earnings. Transferring the token hands all of that over, with any running lease intact.
+3. **Scarcity.** Tokens are minted only as numbered editions of a capped type, so the token is the proof that an item is, say, 2 of 5.
+4. **Game identity.** The token's record names the game that made it, which is how a game recognises its own items.
+5. **Bridge to existing games.** A player can deposit any NEP-171 token from another collection, and LeaseKey issues a rentable token backed by it, redeemable for the original.
+
+What the NFT is not used for: it is never transferred to a renter. Renting uses an access key on the item's account, and that is the whole point.
