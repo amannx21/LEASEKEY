@@ -175,7 +175,10 @@ pub struct ItemRef {
     pub verified: bool,
     pub item_type: Option<String>,
     pub edition: Option<u32>,
+    /// The fixed cap, or None while the type is open supply.
     pub max_supply: Option<u32>,
+    /// How many of this type exist so far. With an open supply this is the live scarcity signal.
+    pub minted: Option<u32>,
     /// The game's stats for this item, from its type (or its wrap).
     pub stats: Vec<Stat>,
 }
@@ -431,7 +434,9 @@ impl LeaseKey {
         let type_id = slug(&type_id);
         require!(!name.is_empty() && name.len() <= 48, "name must be 1..=48 chars");
         require!(image.len() <= 256, "image too long");
-        require!((1..=10_000).contains(&max_supply), "max_supply must be 1..=10000");
+        // 0 means open supply: the game mints each copy as it drops and does not know the total in advance.
+        // Everyone can still see how many exist, and the game can seal the count later with seal_supply.
+        require!(max_supply <= 10_000, "max_supply must be 0 (open supply) or 1..=10000");
         require!(power <= 1_000, "power above 1000");
         let key = type_key(&game, &type_id);
         let mut types = types_map();
@@ -445,6 +450,20 @@ impl LeaseKey {
         let mut list = index.get(&game).unwrap_or_default();
         list.push(type_id);
         index.insert(&game, &list);
+        t
+    }
+
+    /// Closes an open-supply type at the number that exists now, for example at the end of a
+    /// season. One way only: a sealed type can never mint again, and a cap can never be raised.
+    pub fn seal_supply(&mut self, type_id: String) -> ItemType {
+        let game = env::predecessor_account_id();
+        let key = type_key(&game, &slug(&type_id));
+        let mut types = types_map();
+        let mut t = types.get(&key).unwrap_or_else(|| env::panic_str("no such item type for this game"));
+        require!(t.max_supply == 0, "this type already has a fixed supply");
+        require!(t.minted > 0, "mint at least one before sealing");
+        t.max_supply = t.minted;
+        types.insert(&key, &t);
         t
     }
 
@@ -483,7 +502,7 @@ impl LeaseKey {
         let key = type_key(&game, &item_type);
         let mut types = types_map();
         let mut t = types.get(&key).unwrap_or_else(|| env::panic_str("no such item type for this game"));
-        require!(t.minted < t.max_supply, "supply cap reached");
+        require!(t.max_supply == 0 || t.minted < t.max_supply, "supply cap reached");
         t.minted += 1;
         types.insert(&key, &t);
         let e = Edition { item_type: t.type_id, number: t.minted };
@@ -522,7 +541,10 @@ impl LeaseKey {
         let key = type_key(&creator, &slug(&type_id));
         let mut types = types_map();
         let mut t = types.get(&key).unwrap_or_else(|| env::panic_str("no such item type for this game"));
-        require!(t.minted < t.max_supply, format!("supply cap reached: only {} {} can exist", t.max_supply, t.name));
+        require!(
+            t.max_supply == 0 || t.minted < t.max_supply,
+            format!("supply cap reached: only {} {} can exist", t.max_supply, t.name)
+        );
         t.minted += 1;
         types.insert(&key, &t);
         let item = NewItem {
@@ -748,10 +770,12 @@ impl LeaseKey {
         let game = self.item_game.get(&token_id).cloned();
         let game_name = game.as_ref().and_then(|g| self.games.get(g)).map(|g| g.name.clone());
         let edition = editions_map().get(&token_id);
-        let max_supply = match (&game, &edition) {
-            (Some(g), Some(e)) => types_map().get(&type_key(g, &e.item_type)).map(|t| t.max_supply),
+        let item_type = match (&game, &edition) {
+            (Some(g), Some(e)) => types_map().get(&type_key(g, &e.item_type)),
             _ => None,
         };
+        let max_supply = item_type.as_ref().map(|t| t.max_supply).filter(|&m| m > 0);
+        let minted = item_type.as_ref().map(|t| t.minted);
         let stats = match (&game, &edition) {
             (Some(g), Some(e)) => stats_map().get(&type_key(g, &e.item_type)).unwrap_or_default(),
             _ => wrap_stats_map().get(&token_id).unwrap_or_default(),
@@ -762,6 +786,7 @@ impl LeaseKey {
             item_type: edition.as_ref().map(|e| e.item_type.clone()),
             edition: edition.map(|e| e.number),
             max_supply,
+            minted,
             item_account: self.item_account(token_id.clone()),
             owner: self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::current_account_id()),
             origin: self.origins.get(&token_id).cloned(),

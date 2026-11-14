@@ -26,6 +26,16 @@ export const ARENA_GAME: string = (deployment as any).arenaGame || "";
 export const ARENA_GAMES: string[] = [HOUSE_GAME, DEMO_COLLECTION, ARENA_GAME].filter(Boolean);
 export const usableInArena = (i: { game: string | null }) => !!i.game && ARENA_GAMES.includes(i.game);
 
+/** How many copies count for pricing and rarity: the game's fixed limit, or how many exist so far. */
+export const copiesOf = (i: { max_supply: number | null; minted?: number | null }) => i.max_supply ?? i.minted ?? null;
+
+/** Supply line for an item: "Edition 2 of 5 ever made", or "Copy #7 · 12 exist so far". */
+export function supplyText(i: { edition: number | null; max_supply: number | null; minted?: number | null }, short = false): string | null {
+  if (!i.edition) return null;
+  if (i.max_supply) return `Edition ${i.edition} of ${i.max_supply}${short ? "" : " ever made"}`;
+  return `Copy #${i.edition} · ${i.minted ?? i.edition} exist so far`;
+}
+
 /** Suggested rent per hour from how hard the item is to get: fewer copies and more power cost more. */
 export function suggestedPrice(power: number, maxSupply: number | null): bigint {
   const scarcity = Math.sqrt(10 / Math.max(1, maxSupply ?? 10));
@@ -110,6 +120,8 @@ export type ItemView = {
   item_type: string | null;
   edition: number | null;
   max_supply: number | null;
+  /** How many copies of this type exist so far. Each copy is its own token and account with its own owner. */
+  minted: number | null;
   stats: Stat[];
 };
 
@@ -130,6 +142,8 @@ export type ItemRef = {
   item_type: string | null;
   edition: number | null;
   max_supply: number | null;
+  /** How many copies of this type exist so far. Each copy is its own token and account with its own owner. */
+  minted: number | null;
   stats: Stat[];
 };
 
@@ -204,7 +218,7 @@ export async function loadItems(): Promise<ItemView[]> {
   const refs = await view<ItemRef[]>(FACTORY_ID, "get_items", { limit: 100 });
   const items = await Promise.all(
     refs.map(async (r) => ({
-      ...(await view<Omit<ItemView, "game" | "game_name" | "origin" | "verified" | "item_type" | "edition" | "max_supply" | "stats">>(r.item_account, "get_item")),
+      ...(await view<Omit<ItemView, "game" | "game_name" | "origin" | "verified" | "item_type" | "edition" | "max_supply" | "minted" | "stats">>(r.item_account, "get_item")),
       game: r.game,
       game_name: r.game_name,
       origin: r.origin,
@@ -212,6 +226,7 @@ export async function loadItems(): Promise<ItemView[]> {
       item_type: r.item_type,
       edition: r.edition,
       max_supply: r.max_supply,
+      minted: r.minted ?? null,
       stats: r.stats ?? [],
     })),
   );

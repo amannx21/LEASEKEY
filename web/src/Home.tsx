@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { FACTORY_ID, fmtNear, short, view, type ItemView } from "./near";
+import { FACTORY_ID, fmtNear, short, view, type ItemView, copiesOf } from "./near";
 import { HeroSnap } from "./HeroSnap";
 import { useChain } from "./store";
 import { AccountLink, Icon, statusOf } from "./ui";
@@ -425,7 +425,7 @@ function Featured({ items, onOpen, onAll }: { items: ItemView[]; onOpen: (id: st
       <div className="feat-strip">
         {top.map((i) => {
           const look = lookOf(i.image);
-          const r = rarityOf(i.power, i.max_supply);
+          const r = rarityOf(i.power, copiesOf(i));
           return (
             <button key={i.account_id} className="feat" style={{ ["--c1" as string]: look.colors[0], ["--c2" as string]: look.colors[1] }}
               onClick={() => onOpen(i.account_id)}>

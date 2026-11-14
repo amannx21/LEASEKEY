@@ -389,3 +389,44 @@ async fn a_separate_game_contract_rewards_its_players_through_public_mint() -> a
     assert!(format!("{r:?}").contains("does not accept items from that game"));
     Ok(())
 }
+
+#[tokio::test]
+async fn open_supply_for_random_drops_then_seal_it() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let f = factory(&worker).await?;
+    let game = worker.dev_create_account().await?;
+    let other = worker.dev_create_account().await?;
+    let dep = mint_deposit(&f).await?;
+    game.call(f.id(), "register_game").args_json(json!({ "name": "Drop Game" }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+
+    // A drop item: the game does not know how many will drop, so it leaves the supply open.
+    define(&game, f.id(), "goblin-axe", 12, 0).await?;
+    for n in 1..=3u32 {
+        let drop: Value = game.call(f.id(), "mint").args_json(item_args("goblin-axe", None))
+            .deposit(dep).max_gas().transact().await?.json()?;
+        assert_eq!(drop["edition"], n);
+        assert_eq!(drop["max_supply"], Value::Null, "open supply has no cap");
+        assert_eq!(drop["minted"], n, "the live count is the scarcity signal");
+    }
+
+    // Only the game that owns the type can seal it.
+    let r = other.call(f.id(), "seal_supply").args_json(json!({ "type_id": "goblin-axe" })).transact().await?;
+    assert!(r.is_failure());
+
+    // End of season: seal at the number that exists. No more can ever be minted.
+    let sealed: Value = game.call(f.id(), "seal_supply").args_json(json!({ "type_id": "goblin-axe" }))
+        .transact().await?.json()?;
+    assert_eq!(sealed["max_supply"], 3);
+    let r = game.call(f.id(), "mint").args_json(item_args("goblin-axe", None)).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("supply cap reached"));
+    let r = game.call(f.id(), "seal_supply").args_json(json!({ "type_id": "goblin-axe" })).transact().await?;
+    assert!(r.is_failure(), "a cap can never be reopened or changed");
+
+    let items: Vec<Value> = f.view("get_items").args_json(json!({ "limit": 10 })).await?.json()?;
+    let first = items.iter().find(|i| i["item_type"] == "goblin-axe").unwrap();
+    assert_eq!(first["max_supply"], 3);
+    assert_eq!(first["minted"], 3);
+    Ok(())
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ART_KEYS, artUrl, lookOf } from "./catalog";
 import {
   DEMO_COLLECTION, FACTORY_ID, TGAS, call, fmtNear, parseNear, sessionKeyFor, suggestedPrice, view,
-  type ItemView, type Settlement,
+  type ItemView, type Settlement, copiesOf,
 } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
@@ -130,10 +130,10 @@ function OwnedRow({ item }: { item: ItemView }) {
             <button
               className="link"
               title="Based on how many of this item can ever exist and its power"
-              onClick={() => setPrice(fmtNear(suggestedPrice(item.power, item.max_supply), 4))}
+              onClick={() => setPrice(fmtNear(suggestedPrice(item.power, copiesOf(item)), 4))}
             >
-              Suggest {fmtNear(suggestedPrice(item.power, item.max_supply), 3)}
-              {item.max_supply ? ` · ${item.max_supply === 1 ? "only one exists" : `${item.max_supply} exist`}` : ""}
+              Suggest {fmtNear(suggestedPrice(item.power, copiesOf(item)), 3)}
+              {copiesOf(item) ? ` · ${copiesOf(item) === 1 ? "only one exists" : `${copiesOf(item)} exist${item.max_supply ? "" : " so far"}`}` : ""}
             </button>
             <button disabled={!!c.busy} onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString() })}>
               {item.listed ? "Update price" : "List for rent"}
@@ -417,6 +417,8 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
   const [art, setArt] = useState("flame-sword");
   const [power, setPower] = useState(35);
   const [supply, setSupply] = useState(5);
+  // Most game items have no fixed count: the game mints a copy whenever one drops. A limit is optional.
+  const [limited, setLimited] = useState(false);
   const [pick, setPick] = useState("");
   const [player, setPlayer] = useState("");
   const [royalty, setRoyalty] = useState(10);
@@ -429,24 +431,30 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
 
   const define = async () => {
     await c.run(`Defining ${name}…`, (who) =>
-      call(who, FACTORY_ID, "define_item_type", { type_id: name, name, image: `${art}.svg`, power, max_supply: supply }, 10n ** 22n));
+      call(who, FACTORY_ID, "define_item_type", { type_id: name, name, image: `${art}.svg`, power, max_supply: limited ? supply : 0 }, 10n ** 22n));
     await load();
   };
 
   const chosen = types.find((t) => t.type_id === pick);
+  const full = (t: ItemType) => t.max_supply > 0 && t.minted >= t.max_supply;
+  const seal = async () => {
+    await c.run(`Sealing ${chosen?.name}…`, (who) => call(who, FACTORY_ID, "seal_supply", { type_id: pick }));
+    c.toast("ok", `${chosen!.name} is sealed at ${chosen!.minted}. No more can ever be made.`);
+    await load();
+  };
   const mint = () =>
     c.run(`Minting ${chosen?.name}…`, async (who) => {
       const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
       const owner = player.trim() || me;
       const minted = await call<{ token_id: string; item_account: string; edition: number } | null>(who, FACTORY_ID, "mint", {
         args: {
-          item_type: pick, price_per_hour: suggestedPrice(chosen!.power, chosen!.max_supply).toString(), max_secs: "7200",
+          item_type: pick, price_per_hour: suggestedPrice(chosen!.power, chosen!.max_supply || chosen!.minted + 1).toString(), max_secs: "7200",
           royalty_bps: Math.round(royalty * 100), owner,
         },
       }, deposit, 150n * TGAS);
       if (!minted) throw new Error("mint failed, deposit refunded");
       if (owner === me) await call(who, minted.item_account, "list", {});
-      c.toast("ok", `${chosen!.name} edition ${minted.edition} of ${chosen!.max_supply} minted to ${owner}.`);
+      c.toast("ok", `${chosen!.name} copy #${minted.edition}${chosen!.max_supply ? ` of ${chosen!.max_supply}` : ""} minted to ${owner}, with its own ID and account.`);
       await load();
     });
 
@@ -455,8 +463,9 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
       <section className="panel studio">
         <h3>1. Define an item type</h3>
         <p className="muted">
-          Decide once what this item is and how many can ever exist. The chain enforces the cap and the power, and the
-          type can never be edited, not even by you. Scarcer items rent for more.
+          Decide once what this item is: its look, power and stats. The type can never be edited, not even by you. You
+          do not need to say how many will exist. Each time one drops, mint a copy to that player: it gets its own ID
+          and its own account, tied to its owner.
         </p>
         <label>Item name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <label>Look</label>
@@ -468,8 +477,13 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
           ))}
         </div>
         <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
-        <label>Only {supply} will ever exist<input type="range" min={1} max={50} value={supply} onChange={(e) => setSupply(Number(e.target.value))} /></label>
-        <p className="fine">Suggested rent: {fmtNear(suggestedPrice(power, supply), 3)} NEAR per hour.</p>
+        <label className="check"><input type="checkbox" checked={limited} onChange={(e) => setLimited(e.target.checked)} /> Limited edition: fix how many can ever exist</label>
+        {limited ? (
+          <label>Only {supply} will ever exist<input type="range" min={1} max={50} value={supply} onChange={(e) => setSupply(Number(e.target.value))} /></label>
+        ) : (
+          <p className="fine">No fixed count. Players see how many exist so far, and you can seal the count later, for example at season end. Common loot only needs minting when its player wants to rent it out.</p>
+        )}
+        <p className="fine">Suggested rent: {fmtNear(suggestedPrice(power, limited ? supply : 20), 3)} NEAR per hour{limited ? "" : " to start; it falls as more copies exist"}.</p>
         <button className="primary" disabled={!!c.busy || !name.trim()} onClick={define}>Define for 0.01 NEAR</button>
       </section>
 
@@ -479,9 +493,9 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
         {types.length === 0 && <p className="muted">No item types yet. Define one first.</p>}
         <div className="type-list">
           {types.map((t) => (
-            <button key={t.type_id} className={pick === t.type_id ? "on" : ""} onClick={() => setPick(t.type_id)} disabled={t.minted >= t.max_supply}>
+            <button key={t.type_id} className={pick === t.type_id ? "on" : ""} onClick={() => setPick(t.type_id)} disabled={full(t)}>
               <img src={artUrl(t.image)} alt="" />
-              <span><b>{t.name}</b><small className="num">{t.minted} of {t.max_supply} minted · power {t.power}</small></span>
+              <span><b>{t.name}</b><small className="num">{t.max_supply ? `${t.minted} of ${t.max_supply} minted` : `${t.minted} minted · no fixed count`} · power {t.power}</small></span>
             </button>
           ))}
         </div>
@@ -489,9 +503,13 @@ function Studio({ gameName, me }: { gameName: string; me: string }) {
           <>
             <label>Give it to player (account ID, blank for yourself)<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
             <label>Your royalty on every rental: {royalty}%<input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} /></label>
-            <button className="primary" disabled={!!c.busy || chosen.minted >= chosen.max_supply} onClick={mint}>
-              {chosen.minted >= chosen.max_supply ? "Sold out: the cap is reached" : `Mint edition ${chosen.minted + 1} of ${chosen.max_supply}`}
+            <button className="primary" disabled={!!c.busy || full(chosen)} onClick={mint}>
+              {full(chosen) ? "Sold out: the cap is reached"
+                : chosen.max_supply ? `Mint edition ${chosen.minted + 1} of ${chosen.max_supply}` : `Mint copy #${chosen.minted + 1}`}
             </button>
+            {chosen.max_supply === 0 && chosen.minted > 0 && (
+              <button className="ghost" disabled={!!c.busy} onClick={seal}>Seal at {chosen.minted}: no more can ever be made</button>
+            )}
           </>
         )}
       </section>

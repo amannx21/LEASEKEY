@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { GAS_BUDGET, fmtNear, sessionKeyFor, short, usableInArena, type ItemView } from "./near";
+import { GAS_BUDGET, fmtNear, sessionKeyFor, short, usableInArena, type ItemView, copiesOf, supplyText } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
 
@@ -130,7 +130,7 @@ function gameLabel(item: ItemView) {
 
 function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: () => void }) {
   const look = lookOf(item.image);
-  const r = rarityOf(item.power, item.max_supply);
+  const r = rarityOf(item.power, copiesOf(item));
   const status = statusOf(item);
   return (
     <button
@@ -146,8 +146,8 @@ function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: (
         <span className="cls">{look.cls === "Armor" ? "Armour" : look.cls}</span>
       </span>
       <b className="item-name">{item.name}</b>
-      {item.edition && item.max_supply ? (
-        <span className="edition num">Edition {item.edition} of {item.max_supply}{item.max_supply === 1 ? ", the only one" : ""}</span>
+      {item.edition ? (
+        <span className="edition num">{supplyText(item, true)}{item.max_supply === 1 ? ", the only one" : ""}</span>
       ) : item.origin ? (
         <span className="edition">{item.stats.length ? "Rated by its game" : "Awaiting rating from its game"} · original in escrow</span>
       ) : null}
@@ -181,7 +181,7 @@ function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: (
 function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
   const c = useChain();
   const look = lookOf(item.image);
-  const r = rarityOf(item.power, item.max_supply);
+  const r = rarityOf(item.power, copiesOf(item));
   const status = statusOf(item);
   const mine = c.me?.accountId === item.owner;
   const iRent = c.me?.accountId === item.renter && !!sessionKeyFor(item);
@@ -232,7 +232,7 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
             <div><dt>Leases so far</dt><dd className="num">{item.rental_count}</dd></div>
             <div><dt>Owner</dt><dd><AccountLink id={item.owner} />{mine && " (you)"}</dd></div>
             <div><dt>Its own account</dt><dd><AccountLink id={item.account_id} /></dd></div>
-            <div><dt>Supply</dt><dd className="num">{item.max_supply ? `Edition ${item.edition} of ${item.max_supply} ever made` : item.origin ? "Set by its original collection" : "Unique"}</dd></div>
+            <div><dt>Supply</dt><dd className="num">{supplyText(item) ?? (item.origin ? "Set by its original collection" : "Unique")}</dd></div>
             <div><dt>Works in Slime Arena</dt><dd>{usableInArena(item) ? "Yes" : "No, it belongs to another game"}</dd></div>
             <div><dt>Game</dt><dd>{item.verified ? "✓ " : "Unverified · "}{item.origin ? <>Wrapped from <AccountLink id={item.origin.contract} /></> : item.game_name ?? "Unregistered"}</dd></div>
             {item.origin && <div><dt>Original NFT</dt><dd className="num">#{item.origin.token_id}, held in escrow</dd></div>}

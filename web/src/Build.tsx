@@ -147,7 +147,7 @@ export function Build() {
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
               {c.items.map((i) => (
                 <option key={i.account_id} value={i.account_id}>
-                  {i.name}{i.max_supply && i.max_supply > 1 ? ` · edition ${i.edition} of ${i.max_supply}` : ""}
+                  {i.name}{i.edition && i.max_supply !== 1 ? ` · copy #${i.edition}` : ""}
                 </option>
               ))}
             </select>

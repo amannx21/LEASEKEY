@@ -72,7 +72,10 @@ export type ItemRef = {
   verified: boolean;
   item_type: string | null;
   edition: number | null;
+  /** The game's fixed limit, or null when there is no fixed count. */
   max_supply: number | null;
+  /** How many copies of this type exist so far. */
+  minted: number | null;
 };
 
 /** A plain function-call description any wallet (Wallet Selector, HOT, Meteor…) can sign. */
@@ -239,18 +242,27 @@ export class LeaseKey {
    * A registered game mints an item to a player (`owner`, default the game itself).
    * The game is the creator and earns the royalty. Listing is done by the owner.
    */
-  /** A registered game defines a capped item type once. It can never be edited. */
-  defineItemTypeAction(t: { typeId: string; name: string; image: string; power: number; maxSupply: number }): CallSpec {
+  /**
+   * A registered game defines an item type once. It can never be edited.
+   * Leave maxSupply out (or 0) when the game does not know how many will drop: each mint then
+   * creates the next copy with its own ID, and the game can seal the count later with sealSupplyAction.
+   */
+  defineItemTypeAction(t: { typeId: string; name: string; image: string; power: number; maxSupply?: number }): CallSpec {
     return {
       receiverId: this.factoryId,
       methodName: "define_item_type",
-      args: { type_id: t.typeId, name: t.name, image: t.image, power: t.power, max_supply: t.maxSupply },
+      args: { type_id: t.typeId, name: t.name, image: t.image, power: t.power, max_supply: t.maxSupply ?? 0 },
       deposit: 10n ** 22n,
       gas: 30n * TGAS,
     };
   }
 
-  /** A game's item types with their supply caps and how many exist. */
+  /** Closes an open-supply type at the number that exists now. One way: it can never mint again. */
+  sealSupplyAction(typeId: string): CallSpec {
+    return { receiverId: this.factoryId, methodName: "seal_supply", args: { type_id: typeId }, deposit: 0n, gas: 30n * TGAS };
+  }
+
+  /** A game's item types with their supply caps (0 = no fixed count) and how many exist. */
   itemTypes(game: string) {
     return this.view<{ type_id: string; name: string; image: string; power: number; max_supply: number; minted: number }[]>(
       this.factoryId, "get_item_types", { game },

@@ -325,3 +325,15 @@ Verified: an expired Aegis Plate lease closed from the item panel in about 5 sec
 **Gap found:** the item page did not show the other copies, so a renter could not compare them.
 
 **Fix:** the item page now lists "Other copies of this item" with edition, owner, price and status, available copies first, cheapest first. Clicking one opens it.
+
+## 36. Games don't know how many weapons they will have; drops are random
+
+**Answer:** right, and the chain does not need a count. Every copy is already its own token with its own ID and its own NEAR account, tied to whoever owns it, so ten players holding a "Goblin Axe" are ten different IDs with ten different owners. What a type fixes is only what the item *is* (look, power, stats), so nobody can mint a stronger fake.
+
+**Fix:**
+- No fixed count is now the default. A game defines a type without saying how many will exist (`max_supply: 0`) and mints a copy to a player each time one drops. Each copy is labelled "Copy #7 · 12 exist so far", and rent suggestions and rarity follow that live count.
+- A fixed limit is optional ("Limited edition"), for items a game deliberately makes scarce, like a 1 of 1 legendary.
+- `seal_supply` lets a game close the count later, for example at season end. It is one way: a sealed or limited type can never mint again or be raised.
+- Common loot does not need to go on chain at all. Creating a copy costs about 0.16 NEAR of storage, so a game mints a drop when its player wants to rent it out; everything else stays in the game's own inventory.
+
+Test: `open_supply_for_random_drops_then_seal_it`. Live on testnet: the factory reports `minted` for every item.
