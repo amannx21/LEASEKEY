@@ -25,6 +25,7 @@ use near_contract_standards::non_fungible_token::metadata::{
 use near_contract_standards::non_fungible_token::{NonFungibleToken, Token, TokenId};
 use near_sdk::json_types::{Base58CryptoHash, U128, U64};
 use near_sdk::serde_json::json;
+use near_sdk::collections::LookupMap as RawMap;
 use near_sdk::store::{IterableMap, LookupMap};
 use near_sdk::{
     assert_one_yocto, env, log, near, require, AccountId, BorshStorageKey, Gas, NearToken,
@@ -87,11 +88,35 @@ pub struct Origin {
     pub token_id: TokenId,
 }
 
-#[near(serializers = [json])]
-pub struct MintArgs {
+/// A kind of item a game makes, with a hard supply cap. Defined once, never edited:
+/// nobody, not even the game, can later raise the cap or mint a stronger copy.
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct ItemType {
+    pub game: AccountId,
+    pub type_id: String,
     pub name: String,
     pub image: String,
     pub power: u32,
+    pub max_supply: u32,
+    pub minted: u32,
+}
+
+/// Which type an item belongs to and its serial number, e.g. 2 of 5.
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Edition {
+    pub item_type: String,
+    pub number: u32,
+}
+
+#[near(serializers = [json])]
+pub struct MintArgs {
+    /// The game's item type. Required: name, art and power come from it.
+    pub item_type: Option<String>,
+    pub name: Option<String>,
+    pub image: Option<String>,
+    pub power: Option<u32>,
     pub price_per_hour: U128,
     pub max_secs: U64,
     pub royalty_bps: u16,
@@ -123,6 +148,11 @@ pub struct ItemRef {
     pub game: Option<AccountId>,
     pub game_name: Option<String>,
     pub origin: Option<Origin>,
+    /// The game is a LeaseKey-verified partner.
+    pub verified: bool,
+    pub item_type: Option<String>,
+    pub edition: Option<u32>,
+    pub max_supply: Option<u32>,
 }
 
 #[near(serializers = [json])]
@@ -130,6 +160,7 @@ pub struct GameView {
     pub account_id: AccountId,
     pub name: String,
     pub registered_at: U64,
+    pub verified: bool,
 }
 
 #[near(serializers = [json])]
@@ -164,6 +195,27 @@ struct LeaseKeyV1 {
     next_id: u64,
 }
 
+// Collections added after launch live under their own prefixes, so the
+// contract state struct (and its borsh layout) did not have to change.
+fn types_map() -> RawMap<String, ItemType> {
+    RawMap::new(b"ty".to_vec())
+}
+fn type_index_map() -> RawMap<AccountId, Vec<String>> {
+    RawMap::new(b"tl".to_vec())
+}
+fn editions_map() -> RawMap<TokenId, Edition> {
+    RawMap::new(b"ed".to_vec())
+}
+fn verified_map() -> RawMap<AccountId, bool> {
+    RawMap::new(b"vf".to_vec())
+}
+fn is_verified(game: &AccountId) -> bool {
+    verified_map().get(game).unwrap_or(false)
+}
+fn type_key(game: &AccountId, type_id: &str) -> String {
+    format!("{game}:{type_id}")
+}
+
 fn slug(name: &str) -> String {
     let mut out = String::new();
     for c in name.to_lowercase().chars() {
@@ -185,6 +237,7 @@ fn slug(name: &str) -> String {
 }
 
 struct NewItem {
+    edition: Option<Edition>,
     name: String,
     image: String,
     power: u32,
@@ -290,20 +343,90 @@ impl LeaseKey {
             r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"game_registered","data":{{"game":"{}"}}}}"#,
             id
         );
-        GameView { account_id: id, name: game.name, registered_at: game.registered_at }
+        GameView { verified: is_verified(&id), account_id: id, name: game.name, registered_at: game.registered_at }
     }
 
     pub fn get_games(&self) -> Vec<GameView> {
         self.games
             .iter()
-            .map(|(id, g)| GameView { account_id: id.clone(), name: g.name.clone(), registered_at: g.registered_at })
+            .map(|(id, g)| GameView { account_id: id.clone(), name: g.name.clone(), registered_at: g.registered_at, verified: is_verified(id) })
             .collect()
     }
 
     pub fn get_game(&self, account_id: AccountId) -> Option<GameView> {
-        self.games
-            .get(&account_id)
-            .map(|g| GameView { account_id, name: g.name.clone(), registered_at: g.registered_at })
+        self.games.get(&account_id).map(|g| GameView {
+            verified: is_verified(&account_id),
+            account_id,
+            name: g.name.clone(),
+            registered_at: g.registered_at,
+        })
+    }
+
+    /// Admin marks a game as a verified LeaseKey partner. Registration stays
+    /// open to anyone; verification is what the Armory shows by default.
+    pub fn set_verified(&mut self, game: AccountId, verified: bool) {
+        self.assert_admin();
+        require!(self.games.contains_key(&game), "not a registered game");
+        let mut v = verified_map();
+        if verified {
+            v.insert(&game, &true);
+        } else {
+            v.remove(&game);
+        }
+    }
+
+    // ----------------------------------------------------------- item types
+
+    /// A game defines a kind of item once: its name, art, power and how many
+    /// can ever exist. It cannot be changed afterwards.
+    #[payable]
+    pub fn define_item_type(&mut self, type_id: String, name: String, image: String, power: u32, max_supply: u32) -> ItemType {
+        let game = env::predecessor_account_id();
+        require!(self.games.contains_key(&game), "only registered games can define items");
+        require!(env::attached_deposit().as_yoctonear() >= GAME_DEPOSIT, "attach 0.01 NEAR for storage");
+        let type_id = slug(&type_id);
+        require!(!name.is_empty() && name.len() <= 48, "name must be 1..=48 chars");
+        require!(image.len() <= 256, "image too long");
+        require!((1..=10_000).contains(&max_supply), "max_supply must be 1..=10000");
+        require!(power <= 1_000, "power above 1000");
+        let key = type_key(&game, &type_id);
+        let mut types = types_map();
+        require!(types.get(&key).is_none(), "item type already defined; types cannot be changed");
+        let t = ItemType { game: game.clone(), type_id: type_id.clone(), name, image, power, max_supply, minted: 0 };
+        types.insert(&key, &t);
+        let mut index = type_index_map();
+        let mut list = index.get(&game).unwrap_or_default();
+        list.push(type_id);
+        index.insert(&game, &list);
+        t
+    }
+
+    pub fn get_item_types(&self, game: AccountId) -> Vec<ItemType> {
+        let types = types_map();
+        type_index_map()
+            .get(&game)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|id| types.get(&type_key(&game, id)))
+            .collect()
+    }
+
+    /// Admin only: assign an edition to an item minted before types existed.
+    /// Counts against the type's cap like any other mint.
+    pub fn backfill_edition(&mut self, token_id: TokenId, item_type: String) -> Edition {
+        self.assert_admin();
+        let game = self.item_game.get(&token_id).cloned().unwrap_or_else(|| env::panic_str("unknown token"));
+        let mut editions = editions_map();
+        require!(editions.get(&token_id).is_none(), "token already has an edition");
+        let key = type_key(&game, &item_type);
+        let mut types = types_map();
+        let mut t = types.get(&key).unwrap_or_else(|| env::panic_str("no such item type for this game"));
+        require!(t.minted < t.max_supply, "supply cap reached");
+        t.minted += 1;
+        types.insert(&key, &t);
+        let e = Edition { item_type: t.type_id, number: t.minted };
+        editions.insert(&token_id, &e);
+        e
     }
 
     // ----------------------------------------------------------------- mint
@@ -331,11 +454,20 @@ impl LeaseKey {
         let deposit = env::attached_deposit().as_yoctonear();
         let required = self.mint_deposit().0;
         require!(deposit >= required, format!("attach at least {required} yoctoNEAR"));
-        require!(args.image.len() <= 256, "image too long");
+        // Scarcity is enforced here: every item belongs to a capped type, and
+        // its name, art and power come from that type, never from the caller.
+        let type_id = args.item_type.clone().unwrap_or_else(|| env::panic_str("item_type is required: define_item_type first"));
+        let key = type_key(&creator, &slug(&type_id));
+        let mut types = types_map();
+        let mut t = types.get(&key).unwrap_or_else(|| env::panic_str("no such item type for this game"));
+        require!(t.minted < t.max_supply, format!("supply cap reached: only {} {} can exist", t.max_supply, t.name));
+        t.minted += 1;
+        types.insert(&key, &t);
         let item = NewItem {
-            name: args.name,
-            image: args.image,
-            power: args.power,
+            edition: Some(Edition { item_type: t.type_id.clone(), number: t.minted }),
+            name: t.name,
+            image: t.image,
+            power: t.power,
             price_per_hour: args.price_per_hour,
             max_secs: args.max_secs,
             royalty_bps: args.royalty_bps,
@@ -358,13 +490,26 @@ impl LeaseKey {
         metadata: TokenMetadata,
         deposit: U128,
         payer: AccountId,
+        edition: Option<Edition>,
         #[callback_result] result: Result<(), PromiseError>,
     ) -> Option<ItemRef> {
         if result.is_err() {
+            // give the edition back to the type's supply
+            if let Some(e) = &edition {
+                let key = type_key(&game, &e.item_type);
+                let mut types = types_map();
+                if let Some(mut t) = types.get(&key) {
+                    t.minted = t.minted.saturating_sub(1);
+                    types.insert(&key, &t);
+                }
+            }
             Promise::new(payer).transfer(NearToken::from_yoctonear(deposit.0)).detach();
             return None;
         }
         self.tokens.internal_mint_with_refund(token_id.clone(), owner, Some(metadata), None);
+        if let Some(e) = &edition {
+            editions_map().insert(&token_id, e);
+        }
         self.item_game.insert(token_id.clone(), game);
         Some(self.item_ref(token_id))
     }
@@ -522,7 +667,16 @@ impl LeaseKey {
     fn item_ref(&self, token_id: TokenId) -> ItemRef {
         let game = self.item_game.get(&token_id).cloned();
         let game_name = game.as_ref().and_then(|g| self.games.get(g)).map(|g| g.name.clone());
+        let edition = editions_map().get(&token_id);
+        let max_supply = match (&game, &edition) {
+            (Some(g), Some(e)) => types_map().get(&type_key(g, &e.item_type)).map(|t| t.max_supply),
+            _ => None,
+        };
         ItemRef {
+            verified: game.as_ref().is_some_and(is_verified),
+            item_type: edition.as_ref().map(|e| e.item_type.clone()),
+            edition: edition.map(|e| e.number),
+            max_supply,
             item_account: self.item_account(token_id.clone()),
             owner: self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::current_account_id()),
             origin: self.origins.get(&token_id).cloned(),
@@ -601,6 +755,7 @@ impl LeaseKey {
                 metadata,
                 U128(refund),
                 payer.unwrap_or_else(env::predecessor_account_id),
+                it.edition,
             )),
         }
     }
@@ -648,6 +803,7 @@ impl NonFungibleTokenReceiver for LeaseKey {
             self.wrap_credit.insert(previous_owner_id.clone(), credit - required);
         }
         let item = NewItem {
+            edition: None,
             name: args.name,
             image: args.image.unwrap_or_default(),
             power: args.power.unwrap_or(25),

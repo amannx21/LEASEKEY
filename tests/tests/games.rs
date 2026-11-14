@@ -24,11 +24,21 @@ async fn mint_deposit(f: &Contract) -> anyhow::Result<NearToken> {
     Ok(NearToken::from_yoctonear(d.parse()?))
 }
 
-fn item_args(name: &str, owner: Option<&AccountId>) -> Value {
+fn item_args(item_type: &str, owner: Option<&AccountId>) -> Value {
     json!({ "args": {
-        "name": name, "image": "flame-sword.svg", "power": 40, "price_per_hour": NEAR.to_string(),
+        "item_type": item_type, "price_per_hour": NEAR.to_string(),
         "max_secs": "7200", "royalty_bps": 1000, "owner": owner,
     }})
+}
+
+async fn define(game: &Account, f: &AccountId, type_id: &str, power: u32, max_supply: u32) -> anyhow::Result<()> {
+    game.call(f, "define_item_type")
+        .args_json(json!({ "type_id": type_id, "name": type_id.replace('-', " "), "image": "flame-sword.svg", "power": power, "max_supply": max_supply }))
+        .deposit(NearToken::from_millinear(10))
+        .transact()
+        .await?
+        .into_result()?;
+    Ok(())
 }
 
 #[tokio::test]
@@ -41,13 +51,14 @@ async fn only_registered_games_mint_and_items_record_their_game() -> anyhow::Res
     let dep = mint_deposit(&f).await?;
 
     // A player cannot mint their own "Flame Sword": only games create items.
-    let r = player.call(f.id(), "mint").args_json(item_args("Flame Sword", None)).deposit(dep).max_gas().transact().await?;
+    let r = player.call(f.id(), "mint").args_json(item_args("flame-sword", None)).deposit(dep).max_gas().transact().await?;
     assert!(r.is_failure());
     assert!(format!("{r:?}").contains("only registered games"));
 
     game.call(f.id(), "register_game").args_json(json!({ "name": "Slime Arena" }))
         .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
-    let minted: Value = game.call(f.id(), "mint").args_json(item_args("Flame Sword", Some(player.id())))
+    define(&game, f.id(), "flame-sword", 40, 5).await?;
+    let minted: Value = game.call(f.id(), "mint").args_json(item_args("flame-sword", Some(player.id())))
         .deposit(dep).max_gas().transact().await?.json()?;
     assert_eq!(minted["owner"], json!(player.id()));
     assert_eq!(minted["game"], json!(game.id()));
@@ -61,13 +72,14 @@ async fn only_registered_games_mint_and_items_record_their_game() -> anyhow::Res
     // is permanently labelled with the copycat's game, so Slime Arena ignores it.
     copycat.call(f.id(), "register_game").args_json(json!({ "name": "Totally Slime Arena" }))
         .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
-    let fake: Value = copycat.call(f.id(), "mint").args_json(item_args("Flame Sword", None))
+    define(&copycat, f.id(), "flame-sword", 999, 1000).await?;
+    let fake: Value = copycat.call(f.id(), "mint").args_json(item_args("flame-sword", None))
         .deposit(dep).max_gas().transact().await?.json()?;
     assert_eq!(fake["game"], json!(copycat.id()));
     assert_ne!(fake["game"], minted["game"]);
 
     // Only the admin may mint on behalf of another game.
-    let mut spoof = item_args("Flame Sword", None);
+    let mut spoof = item_args("flame-sword", None);
     spoof["args"]["creator"] = json!(game.id());
     let r = copycat.call(f.id(), "mint").args_json(spoof).deposit(dep).max_gas().transact().await?;
     assert!(r.is_failure());
@@ -195,11 +207,70 @@ async fn migrate_from_v1_keeps_items_and_credits_them_to_the_house_game() -> any
     assert_eq!(items[0]["game"], json!(f.id()));
     assert_eq!(items[0]["game_name"], "LeaseKey Arena");
     // After migration minting is game-only.
-    let r = player.call(f.id(), "mint").args_json(item_args("New Sword", None)).deposit(dep).max_gas().transact().await?;
+    let r = player.call(f.id(), "mint").args_json(item_args("new-sword", None)).deposit(dep).max_gas().transact().await?;
     assert!(r.is_failure());
-    // The house game (the factory itself) can still mint, e.g. for the demo seed.
-    f.call("mint").args_json(item_args("House Sword", Some(player.id()))).deposit(dep).max_gas().transact().await?.into_result()?;
+    // The house game (the factory itself) can still mint typed items, e.g. for the demo seed,
+    // and the admin can give the pre-upgrade item an edition.
+    define(f.as_account(), f.id(), "house-sword", 10, 3).await?;
+    f.call("mint").args_json(item_args("house-sword", Some(player.id()))).deposit(dep).max_gas().transact().await?.into_result()?;
+    f.call("backfill_edition").args_json(json!({ "token_id": token_id, "item_type": "house-sword" })).transact().await?.into_result()?;
     let items: Value = f.view("get_items").args_json(json!({})).await?.json()?;
     assert_eq!(items.as_array().unwrap().len(), 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn supply_caps_fixed_power_and_verified_games() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let f = factory(&worker).await?;
+    let game = worker.dev_create_account().await?;
+    let player = worker.dev_create_account().await?;
+    let dep = mint_deposit(&f).await?;
+    game.call(f.id(), "register_game").args_json(json!({ "name": "Slime Arena" }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+
+    // Minting needs a defined type; free-form items are refused.
+    let r = game.call(f.id(), "mint").args_json(json!({ "args": { "name": "Godslayer", "power": 99999,
+        "price_per_hour": "1", "max_secs": "7200", "royalty_bps": 0 } })).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("item_type is required"));
+
+    // "Only 2 Dragon Lances will ever exist."
+    define(&game, f.id(), "dragon-lance", 60, 2).await?;
+    // A type can never be redefined to raise its cap or power.
+    let r = game.call(f.id(), "define_item_type")
+        .args_json(json!({ "type_id": "dragon-lance", "name": "Dragon Lance", "image": "x.svg", "power": 999, "max_supply": 9999 }))
+        .deposit(NearToken::from_millinear(10)).transact().await?;
+    assert!(r.is_failure());
+
+    // Power comes from the type: asking for more is ignored.
+    let mut args = item_args("dragon-lance", Some(player.id()));
+    args["args"]["power"] = json!(99999);
+    let first: Value = game.call(f.id(), "mint").args_json(args).deposit(dep).max_gas().transact().await?.json()?;
+    assert_eq!(first["edition"], 1);
+    assert_eq!(first["max_supply"], 2);
+    assert_eq!(first["item_type"], "dragon-lance");
+    let item: AccountId = first["item_account"].as_str().unwrap().parse()?;
+    let v: Value = worker.view(&item, "get_item").await?.json()?;
+    assert_eq!(v["power"], 60);
+
+    let second: Value = game.call(f.id(), "mint").args_json(item_args("dragon-lance", None)).deposit(dep).max_gas().transact().await?.json()?;
+    assert_eq!(second["edition"], 2);
+    // The third one does not exist, and never will.
+    let r = game.call(f.id(), "mint").args_json(item_args("dragon-lance", None)).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("supply cap reached"));
+    let types: Value = f.view("get_item_types").args_json(json!({ "game": game.id() })).await?.json()?;
+    assert_eq!(types[0]["minted"], 2);
+
+    // Verification: only the admin can vouch for a game.
+    assert_eq!(first["verified"], false);
+    let r = game.call(f.id(), "set_verified").args_json(json!({ "game": game.id(), "verified": true })).transact().await?;
+    assert!(r.is_failure());
+    f.call("set_verified").args_json(json!({ "game": game.id(), "verified": true })).transact().await?.into_result()?;
+    let items: Value = f.view("get_items").args_json(json!({})).await?.json()?;
+    assert!(items.as_array().unwrap().iter().all(|i| i["verified"] == true));
+    let g: Value = f.view("get_game").args_json(json!({ "account_id": game.id() })).await?.json()?;
+    assert_eq!(g["verified"], true);
     Ok(())
 }

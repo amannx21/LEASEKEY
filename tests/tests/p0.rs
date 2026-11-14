@@ -63,12 +63,17 @@ async fn setup(mode: Mode) -> anyhow::Result<Ctx> {
         .transact()
         .await?
         .into_result()?;
+    creator
+        .call(factory.id(), "define_item_type")
+        .args_json(json!({ "type_id": "flame-sword", "name": "Flame Sword", "image": "flame-sword.svg", "power": 40, "max_supply": 10 }))
+        .deposit(NearToken::from_millinear(10))
+        .transact()
+        .await?
+        .into_result()?;
     let minted: Value = creator
         .call(factory.id(), "mint")
         .args_json(json!({ "args": {
-            "name": "Flame Sword",
-            "image": "flame-sword.svg",
-            "power": 40,
+            "item_type": "flame-sword",
             "price_per_hour": PRICE_PER_HOUR.to_string(),
             "max_secs": "7200",
             "royalty_bps": ROYALTY_BPS,
