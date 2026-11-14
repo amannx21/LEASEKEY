@@ -227,3 +227,14 @@ Players never mint. Items arrive in two ways:
 2. **A player wraps an NFT they already own** from a game's existing collection. The original is held in escrow and returned on unwrap, so no new supply is created.
 
 A player calling `mint` is rejected. Anyone can register a "game", but its items carry that game's name, are marked unverified, are hidden by default in the Armory, and are ignored by real games. A player's actions are: receive, wrap, list, rent, unlist.
+
+## 24. Can items minted elsewhere be listed for rent?
+
+**Answer:** yes, if the item is a standard NEP-171 NFT on NEAR. The owner wraps it under My Items: the original goes into escrow, a rentable item backed by it is created, and unwrapping returns the original when it is not on lease. Test: `wrap_any_nft_rent_it_then_unwrap_it`.
+
+**Limits:**
+
+- NEAR only. NFTs on Ethereum, Ronin, Immutable or Solana would need a cross-chain bridge, which is not built.
+- The original game must honour the lease. It can find the wrapper of its own NFT with `findWrapped` and check access with `canUse`. Without that integration the lease is valid but the game ignores it.
+- Stats are entered by the owner at wrap time. LeaseKey does not yet read them from the original NFT's metadata, so an owner could overstate them. A game should trust its own data for wrapped items.
+- Wrapping costs about 0.16 NEAR for the item's account, refunded on failure.
