@@ -141,3 +141,12 @@ Every Armory card and item panel also shows the item's game.
 **Feedback:** the animation repeated, the gauntlet looked unreal, and the side lightning sat at the window edges instead of being part of the scene.
 
 **Fix:** a knight raises the Thunder Hammer, it charges with sparks, he swings, and an electric beam blasts into the headline. The beam breaks into dust that settles into the grainy "Rent in-game gear". Branching thunder strikes around the knight and the words. Every bolt and flash is drawn as added light on a transparent canvas that extends past the content column, so it blends into the page with no visible edge. A final bolt jolts the letters. The sequence plays once on load, then stops, and replays only on request.
+
+## 16. The hero lagged, and the knight's arm looked wrong
+
+**Feedback:** the animation was laggy and the arm was far too long.
+
+**Cause and fix:**
+
+- **Lag.** Each frame redrew the hammer's vector art under a heavy blur, blurred every lightning bolt three times, and changed fill style for each of about 5,000 dust grains. Now the hammer is rasterised once with its glow baked in. Lightning glow is layered wide, faint strokes under additive blending instead of blur. Dust is drawn in ten colour batches, and resolution is capped at 2x. Measured over a full replay: 15.9 ms average frame, worst 31 ms, no frame over 33 ms, so a steady 60 fps.
+- **Arm.** It was one straight bar from the shoulder to wherever the hand had to be. It is now an upper arm and a forearm with fixed lengths and a bending elbow, solved each frame. A glove grips the handle, and the hammer is a little smaller.

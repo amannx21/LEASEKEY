@@ -69,7 +69,7 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
 
   useEffect(() => {
     const canvas = canvasRef.current!;
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = (W + PAD * 2) * dpr;
     canvas.height = H * dpr;
     const ctx = canvas.getContext("2d")!;
@@ -78,6 +78,19 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const hammer = new Image();
     hammer.src = "/items/thunder-hammer.svg";
+    let hammerBitmap: HTMLCanvasElement | null = null;
+    const GLOW = 30;
+    hammer.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = (HSIZE + GLOW * 2) * dpr;
+      c.height = (HSIZE + GLOW * 2) * dpr;
+      const h = c.getContext("2d")!;
+      h.scale(dpr, dpr);
+      h.shadowColor = "rgba(140, 200, 255, 0.85)";
+      h.shadowBlur = 22;
+      h.drawImage(hammer, GLOW, GLOW, HSIZE, HSIZE);
+      hammerBitmap = c;
+    };
 
     let raf = 0;
     let stopped = false;
@@ -90,25 +103,38 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
 
     // ------------------------------------------------------------ the knight
     /** Pose of the hammer arm over time: where the hand is and how the hammer is tilted. */
+    const SHOULDER = { x: BODY_X + 28, y: GROUND - 180 };
+    const UPPER = 50;
+    const FORE = 46;
     const pose = (t: number) => {
       const charge = easeOut(clamp((t - T_RISE) / (T_CHARGE - T_RISE)));
       const swing = clamp((t - T_CHARGE) / (T_SWING - T_CHARGE));
       const s = swing > 0 ? easeOutBack(swing) : 0;
+      // raised, then drawn back over the head, then thrust forward
       const hand = {
-        x: lerp(lerp(BODY_X + 74, BODY_X + 40, charge), BODY_X + 118, s),
-        y: lerp(lerp(GROUND - 270, GROUND - 300, charge), GROUND - 238, s),
+        x: lerp(lerp(BODY_X + 70, BODY_X + 44, charge), BODY_X + 112, s),
+        y: lerp(lerp(GROUND - 254, GROUND - 266, charge), GROUND - 214, s),
       };
       const ang = lerp(lerp(0, -0.95, charge), 0.85, s);
       return { hand, ang };
     };
 
     // hammer art: grip at (175, 410), head centre at (310, 154) in the 512px image
-    const HSIZE = 220;
+    const HSIZE = 190;
     const k = HSIZE / 512;
     const headOf = (hand: { x: number; y: number }, ang: number) => {
       const dx = (310 - 175) * k;
       const dy = (154 - 410) * k;
       return { x: hand.x + dx * Math.cos(ang) - dy * Math.sin(ang), y: hand.y + dx * Math.sin(ang) + dy * Math.cos(ang) };
+    };
+
+    /** Where the glove actually ends up once the arm's length is respected. */
+    const gripOf = (hand: { x: number; y: number }) => {
+      const dx = hand.x - SHOULDER.x;
+      const dy = hand.y - SHOULDER.y;
+      const reach = Math.min(Math.hypot(dx, dy), UPPER + FORE - 1);
+      const a = Math.atan2(dy, dx);
+      return { x: SHOULDER.x + Math.cos(a) * reach, y: SHOULDER.y + Math.sin(a) * reach };
     };
 
     const drawKnight = (t: number, rise: number, lit: number) => {
@@ -177,25 +203,59 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
       ctx.shadowBlur = 10 + lit * 20;
       ctx.fillRect(x - 14, g - 223, 28, 3);
       ctx.shadowBlur = 0;
-      // hammer arm
+      // hammer arm: upper arm and forearm with a bending elbow
+      const sh = SHOULDER;
+      const dx = hand.x - sh.x;
+      const dy = hand.y - sh.y;
+      const reach = Math.min(Math.hypot(dx, dy), UPPER + FORE - 1);
+      const base = Math.atan2(dy, dx);
+      const bend = Math.acos((UPPER * UPPER + reach * reach - FORE * FORE) / (2 * UPPER * reach));
+      const elbow = { x: sh.x + Math.cos(base + bend) * UPPER, y: sh.y + Math.sin(base + bend) * UPPER };
+      const wrist = { x: sh.x + Math.cos(base) * reach, y: sh.y + Math.sin(base) * reach };
       ctx.strokeStyle = steel;
-      ctx.lineWidth = 21;
+      ctx.lineCap = "round";
+      ctx.lineWidth = 19;
       ctx.beginPath();
-      ctx.moveTo(x + 30, g - 176);
-      ctx.lineTo(hand.x, hand.y);
+      ctx.moveTo(sh.x, sh.y);
+      ctx.lineTo(elbow.x, elbow.y);
       ctx.stroke();
+      ctx.lineWidth = 16;
+      ctx.beginPath();
+      ctx.moveTo(elbow.x, elbow.y);
+      ctx.lineTo(wrist.x, wrist.y);
+      ctx.stroke();
+      ctx.fillStyle = "#8f88b8";
+      ctx.beginPath();
+      ctx.arc(elbow.x, elbow.y, 8, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#e9b23f";
       ctx.beginPath();
-      ctx.arc(x + 30, g - 178, 16, 0, Math.PI * 2);
+      ctx.ellipse(sh.x + 2, sh.y - 2, 19, 15, -0.4, 0, Math.PI * 2);
       ctx.fill();
-      // the hammer itself
-      if (hammer.complete && hammer.naturalWidth) {
+      // the hammer, gripped in an armoured glove
+      if (hammerBitmap) {
         ctx.save();
-        ctx.translate(hand.x, hand.y);
+        ctx.translate(wrist.x, wrist.y);
         ctx.rotate(ang);
-        ctx.shadowColor = "rgba(140, 200, 255, 0.8)";
-        ctx.shadowBlur = 18 + lit * 40;
-        ctx.drawImage(hammer, -175 * k, -410 * k, HSIZE, HSIZE);
+        ctx.drawImage(hammerBitmap, -175 * k - GLOW, -410 * k - GLOW, HSIZE + GLOW * 2, HSIZE + GLOW * 2);
+        ctx.restore();
+      }
+      ctx.fillStyle = "#c9c3e6";
+      ctx.beginPath();
+      ctx.arc(wrist.x, wrist.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e9b23f";
+      ctx.fillRect(wrist.x - 9, wrist.y - 2, 18, 4);
+      // a glow that grows with the charge, cheap enough to change every frame
+      if (lit > 0) {
+        const head = headOf(wrist, ang);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const glow = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 70);
+        glow.addColorStop(0, `rgba(150, 210, 255, ${0.45 * lit})`);
+        glow.addColorStop(1, "rgba(120, 160, 255, 0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(head.x - 70, head.y - 70, 140, 140);
         ctx.restore();
       }
       ctx.restore();
@@ -230,17 +290,18 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
       ctx.globalCompositeOperation = "lighter";
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      const passes: [string, number, number, string][] = [
-        ["rgba(150, 100, 255, 0.35)", 14 * b.width, 40, "#7a4bff"],
-        ["rgba(110, 200, 255, 0.75)", 5 * b.width, 22, "#5cc8ff"],
-        ["rgba(245, 252, 255, 1)", 1.8 * b.width, 8, "#ffffff"],
+      // wide faint layers fake the bloom; additive blending makes them glow
+      const passes: [string, number][] = [
+        ["rgba(130, 90, 255, 0.07)", 34 * b.width],
+        ["rgba(130, 90, 255, 0.12)", 18 * b.width],
+        ["rgba(110, 200, 255, 0.35)", 8 * b.width],
+        ["rgba(150, 220, 255, 0.8)", 3.6 * b.width],
+        ["rgba(250, 253, 255, 1)", 1.6 * b.width],
       ];
-      for (const [color, width, blur, glow] of passes) {
+      for (const [color, width] of passes) {
         ctx.globalAlpha = flicker;
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
-        ctx.shadowColor = glow;
-        ctx.shadowBlur = blur;
         strokePath(b.pts);
         ctx.lineWidth = width * 0.55;
         b.forks.forEach(strokePath);
@@ -305,7 +366,15 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
       return { ox: Math.sin(kk / 30) * 9 * damp, oy: Math.cos(kk / 38) * 5 * damp };
     };
 
+    const BUCKETS = 10;
+    const bucketStyle = Array.from({ length: BUCKETS + 1 }, (_, i) => {
+      const e = i / BUCKETS;
+      return `rgba(${Math.round(lerp(150, 255, e))},${Math.round(lerp(210, 212, e))},${Math.round(lerp(255, 128, e))},${(0.4 + 0.6 * e).toFixed(2)})`;
+    });
+    const batches: number[][] = Array.from({ length: BUCKETS + 1 }, () => []);
+
     const drawMotes = (t: number) => {
+      for (const b of batches) b.length = 0;
       for (const m of motes) {
         const kk = (t - m.delay) / m.dur;
         if (kk <= 0) continue;
@@ -322,15 +391,13 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
           y += s.oy;
         }
         // electric blue in flight, cooling to gold as it lands
-        const r = Math.round(lerp(150, 255, e));
-        const g = Math.round(lerp(210, 210 + 4 * m.hue, e));
-        const b = Math.round(lerp(255, 128, e));
-        ctx.globalAlpha = 0.4 + 0.6 * e;
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-        const s = m.size * (1 + u * 0.7);
-        ctx.fillRect(x, y, s, s);
+        batches[Math.round(e * BUCKETS)].push(x, y, m.size * (1 + u * 0.7));
       }
-      ctx.globalAlpha = 1;
+      batches.forEach((list, i) => {
+        if (!list.length) return;
+        ctx.fillStyle = bucketStyle[i];
+        for (let j = 0; j < list.length; j += 3) ctx.fillRect(list[j], list[j + 1], list[j + 2], list[j + 2]);
+      });
     };
 
     // --------------------------------------------------------------- frame
@@ -339,7 +406,8 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
       const t = now - start;
       ctx.clearRect(-PAD, 0, W + PAD * 2, H);
       const rise = easeOut(clamp(t / T_RISE));
-      const { hand, ang } = pose(t);
+      const { hand: rawHand, ang } = pose(t);
+      const hand = gripOf(rawHand);
       const head = headOf(hand, ang);
 
       // the hammer charges: crackles and a growing glow around its head
@@ -389,7 +457,7 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
     document.fonts.load("700 176px Cinzel").finally(() => {
       if (stopped) return;
       const p = pose(T_SWING);
-      motes = buildMotes(headOf(p.hand, p.ang));
+      motes = buildMotes(headOf(gripOf(p.hand), p.ang));
       start = performance.now() - (reduced ? T_DONE - 1 : 0);
       if (reduced) STRIKES.forEach((s) => fired.add(s.t));
       raf = requestAnimationFrame(frame);
