@@ -305,3 +305,11 @@ Verified in the browser: the same guest at 0.10 NEAR was refilled, rented the Ae
 **Fix:** when renting or closing a lease ends in an error, the app asks the chain whether it happened (is this item now leased to me, or is the lease closed) before reporting anything. If it did, the user sees the success message. This also covers pressing "Close lease" on a lease that the arena or the keeper already closed. Automatic retries are now limited to explicit rate-limit refusals, which never reach the chain. "Internal server error" moves reads on to the next server.
 
 Verified: an expired Aegis Plate lease closed from the item panel in about 5 seconds and split the rent between the owner (90%) and the game (10%).
+
+## 32. Dragons flew too high for any attack to reach
+
+**Fix:** a dragon now dives to just above head height as it passes over the hero to breathe fire, then climbs away. Every weapon can hit it while it is low: sword, hammer, shield bash and fists in melee, the wave as it passes under, and arrows and blaster shots aim ahead of it and fly over the slimes instead of being caught by them. Lightning and the beam reach it at any height. The arrival message says "Hit it when it swoops low".
+
+## 33. The access check's player field looked fixed to my own account
+
+**Fix:** "Player account" is now a list built from the chosen item: you, the current renter (when it is leased), the owner, a stranger, or "Type another account…". Trying each one shows who the game would let use the item.

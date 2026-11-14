@@ -14,6 +14,8 @@ const H = 560;
 const GROUND = 452;
 const HERO_X = 190;
 const FIST_DAMAGE = 6;
+/** How low a dragon dives when it swoops over the hero: just above head height, in reach of melee. */
+const SWOOP_Y = GROUND - 190;
 
 /** What one strike of each style does, in game terms. */
 const STYLE_INFO: Record<AttackStyle, string> = {
@@ -363,7 +365,7 @@ export function Arena() {
 type Slime = { x: number; y: number; hp: number; max: number; speed: number; phase: number; flash: number; size: number; hue: number; kb: number; spitter: boolean; spit: number };
 type Shot = { x: number; y: number; vx: number; vy: number; power: number; pierce: number; color: string; kind: "arrow" | "plasma"; hit: Set<Slime | Dragon> };
 /** Flies across the sky and breathes fire at the hero. Only ranged weapons and lightning reach it. */
-type Dragon = { x: number; y: number; vx: number; hp: number; max: number; flap: number; breath: number; breathCd: number; flash: number; fall: number };
+type Dragon = { x: number; y: number; alt: number; vx: number; hp: number; max: number; flap: number; breath: number; breathCd: number; flash: number; fall: number };
 /** Something thrown at the hero: slime goo or dragon fire. A shield stops it. */
 type Hazard = { x: number; y: number; vx: number; vy: number; kind: "goo" | "fire"; dmg: number; life: number };
 type Fx =
@@ -371,7 +373,7 @@ type Fx =
   | { t: "ring"; x: number; y: number; r: number; vr: number; life: number; color: string }
   | { t: "beam"; life: number; color: string }
   | { t: "bolt"; x: number; life: number; pts: number[] }
-  | { t: "wave"; x: number; life: number; color: string; color2: string; hit: Set<Slime>; power: number };
+  | { t: "wave"; x: number; life: number; color: string; color2: string; hit: Set<Slime | Dragon>; power: number };
 type Spark = { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number };
 type Float = { x: number; y: number; text: string; life: number; color: string };
 
@@ -445,6 +447,17 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
   const alive = () => slimes.filter((s) => s.hp > 0);
   const flyingDragons = () => dragons.filter((d) => d.hp > 0);
 
+  /** Melee reaches a dragon only while it swoops low over the hero to breathe fire. */
+  const inReach = (range: number) =>
+    flyingDragons().filter((d) => d.fall === 0 && d.x > HERO_X - 90 && d.x - HERO_X < range && d.y > SWOOP_Y - 30);
+  /** Vertical speed for a shot from (x, y) at speed vx to meet the nearest dragon ahead, leading its flight. */
+  const aimAtDragon = (x: number, y: number, vx: number) => {
+    const d = flyingDragons().filter((dd) => dd.fall === 0 && dd.x > x + 40).sort((a, b) => a.x - b.x)[0];
+    if (!d) return 0;
+    const time = (d.x - x) / (vx - d.vx);
+    return (d.y - y) / time;
+  };
+
   const hitDragon = (d: Dragon, amount: number, color: string) => {
     if (d.hp <= 0) return;
     const dmg = Math.round(amount);
@@ -497,6 +510,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       cooldown = 0.3;
       const target = alive().filter((s) => s.x - HERO_X < 140).sort((a, b) => a.x - b.x)[0];
       if (target) damage(target, FIST_DAMAGE, "#e8e2d0", 6);
+      inReach(170).forEach((d) => hitDragon(d, FIST_DAMAGE, "#e8e2d0"));
       return;
     }
     const { look, power, onChain } = eq;
@@ -509,6 +523,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       case "slash":
         fx.push({ t: "arc", life: 0.28, max: 0.28, color: c1, color2: c2 });
         alive().filter((s) => s.x > HERO_X - 20 && s.x - HERO_X < 230).forEach((s) => damage(s, power, c1, 30));
+        inReach(280).forEach((d) => hitDragon(d, power, c1));
         break;
       case "beam":
         fx.push({ t: "beam", life: 0.3, color: c1 });
@@ -517,16 +532,14 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         break;
       case "arrow": {
         // with a dragon overhead, the bow aims up at it
-        const d = flyingDragons().find((dd) => dd.x > HERO_X + 120);
-        const vy = d ? ((d.y - y) / Math.max(120, d.x - HERO_X)) * 1500 : 0;
+        const vy = aimAtDragon(HERO_X + 60, y, 1500);
         shots.push({ x: HERO_X + 60, y, vx: 1500, vy, power, pierce: 3, color: c1, kind: "arrow", hit: new Set() });
         break;
       }
       case "blast":
         for (let k = 0; k < 3; k++) {
           pending.push({ at: t + k * 0.09, fn: () => {
-            const d = flyingDragons().find((dd) => dd.x > HERO_X + 120);
-            const vy = d ? ((d.y - y) / Math.max(120, d.x - HERO_X)) * 1150 : 0;
+            const vy = aimAtDragon(HERO_X + 74, y, 1150);
             shots.push({ x: HERO_X + 74, y: y + (k - 1) * 8, vx: 1150, vy, power: power * 0.55, pierce: 1, color: k % 2 ? c2 : c1, kind: "plasma", hit: new Set() });
           } });
         }
@@ -536,6 +549,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         fx.push({ t: "ring", x: HERO_X + 70, y: GROUND, r: 20, vr: 900, life: 0.4, color: c2 });
         burst(HERO_X + 70, GROUND, c2, 24, 300);
         alive().filter((s) => s.x - HERO_X < 380).forEach((s) => damage(s, power, c2, 70));
+        inReach(330).forEach((d) => hitDragon(d, power * 0.9, c2));
         break;
       case "bolt": {
         // lightning finds a dragon first
@@ -563,6 +577,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       case "guard":
         fx.push({ t: "ring", x: HERO_X + 60, y: GROUND - 60, r: 30, vr: 500, life: 0.25, color: c1 });
         alive().filter((s) => s.x - HERO_X < 170).forEach((s) => damage(s, power * 0.6, c1, 90));
+        inReach(220).forEach((d) => hitDragon(d, power * 0.6, c1));
         break;
     }
   };
@@ -636,8 +651,9 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     if (!over && t >= nextDragon && flyingDragons().length === 0) {
       nextDragon = t + 14 + Math.random() * 6;
       const max = 150 + kills * 3;
-      dragons.push({ x: W + 140, y: 96 + Math.random() * 50, vx: -110, hp: max, max, flap: 0, breath: 0, breathCd: 0.4, flash: 0, fall: 0 });
-      floats.push({ x: W - 180, y: 70, text: "A dragon approaches", life: 1.6, color: "#ffb347" });
+      const alt = 96 + Math.random() * 50;
+      dragons.push({ x: W + 140, y: alt, alt, vx: -110, hp: max, max, flap: 0, breath: 0, breathCd: 0.4, flash: 0, fall: 0 });
+      floats.push({ x: W - 180, y: 70, text: "A dragon approaches. Hit it when it swoops low", life: 2.2, color: "#ffb347" });
     }
     for (const d of dragons) {
       d.flap += dt * 7;
@@ -649,7 +665,10 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         continue;
       }
       d.x += d.vx * dt;
-      d.y += Math.sin(d.flap * 0.5) * 12 * dt;
+      // it dives to breathe fire close to the hero, which puts it in reach of melee, then climbs away
+      const swooping = d.x < HERO_X + 640 && d.x > HERO_X - 60;
+      const targetY = (swooping ? SWOOP_Y : d.alt) + Math.sin(d.flap * 0.5) * 6;
+      d.y += (targetY - d.y) * Math.min(1, dt * 1.6);
       d.breathCd -= dt;
       if (d.breath <= 0 && d.breathCd <= 0 && d.x > HERO_X + 220 && d.x < HERO_X + 700) {
         d.breath = 1.1;
@@ -701,7 +720,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         }
       }
       for (const s of slimes) {
-        if (sh.pierce > 0 && s.hp > 0 && !sh.hit.has(s) && Math.abs(s.x - sh.x) < s.size + 6) {
+        if (sh.pierce > 0 && s.hp > 0 && !sh.hit.has(s) && Math.abs(s.x - sh.x) < s.size + 6 && sh.y > GROUND - s.size * 2 - 40) {
           sh.hit.add(s);
           sh.pierce -= 1;
           damage(s, sh.power, sh.color, 24);
@@ -713,6 +732,12 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       if (f.t === "ring") f.r += f.vr * dt;
       if (f.t === "wave") {
         f.x += 900 * dt;
+        for (const d of dragons) {
+          if (d.hp > 0 && d.fall === 0 && !f.hit.has(d) && d.y > SWOOP_Y - 30 && Math.abs(d.x - f.x) < 50) {
+            f.hit.add(d);
+            hitDragon(d, f.power, f.color);
+          }
+        }
         for (const s of slimes) {
           if (s.hp > 0 && !f.hit.has(s) && s.x < f.x + 20) {
             f.hit.add(s);

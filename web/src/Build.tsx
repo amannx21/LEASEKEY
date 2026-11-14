@@ -27,10 +27,27 @@ const [deposit, transfer] = await lk.wrapActions(
 // Later, your game finds the wrapper of its own NFT:
 const wrapped = await lk.findWrapped("your-game-items.testnet", tokenId);`;
 
+const CUSTOM = "__custom__";
+const STRANGER = "stranger.testnet";
+
 export function Build() {
   const c = useChain();
   const [itemId, setItemId] = useState(c.items[0]?.account_id ?? "");
   const [player, setPlayer] = useState(c.me?.accountId ?? "");
+  const [typing, setTyping] = useState(false);
+  // Ready-made players for the chosen item, so it is obvious the check works for anyone.
+  const picked = c.items.find((i) => i.account_id === itemId);
+  const playerChoices: [string, string][] = [];
+  const addChoice = (id: string | null | undefined, label: string) => {
+    if (id && !playerChoices.some(([x]) => x === id)) playerChoices.push([id, `${label}: ${id}`]);
+  };
+  addChoice(c.me?.accountId, "You");
+  if (picked?.rental_active) addChoice(picked.renter, "Current renter");
+  addChoice(picked?.owner, "Owner");
+  addChoice(STRANGER, "A stranger");
+  useEffect(() => {
+    if (!typing && !playerChoices.some(([x]) => x === player)) setPlayer(playerChoices[0]?.[0] ?? "");
+  }, [itemId, typing, c.me?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
   // The game doing the check, and the list of games it has chosen to accept.
   const [allGames, setAllGames] = useState<{ account_id: string; name: string }[]>([]);
   const [checker, setChecker] = useState(ARENA_GAME);
@@ -108,7 +125,19 @@ export function Build() {
               {c.items.map((i) => <option key={i.account_id} value={i.account_id}>{i.name}</option>)}
             </select>
           </label>
-          <label>Player account<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
+          <label>Player account
+            <select value={typing ? CUSTOM : player} onChange={(e) => {
+              const v = e.target.value;
+              setTyping(v === CUSTOM);
+              setPlayer(v === CUSTOM ? "" : v);
+            }}>
+              {playerChoices.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              <option value={CUSTOM}>Type another account…</option>
+            </select>
+            {typing && (
+              <input autoFocus value={player} onChange={(e) => setPlayer(e.target.value.trim())} placeholder="any-account.testnet" />
+            )}
+          </label>
           <label>Game doing the check
             <select value={checker} onChange={(e) => setChecker(e.target.value)}>
               {allGames.map((g) => <option key={g.account_id} value={g.account_id}>{g.name}</option>)}
