@@ -239,6 +239,7 @@ async fn migrate_from_v1_keeps_items_and_credits_them_to_the_house_game() -> any
     // The house game (the factory itself) can still mint typed items, e.g. for the demo seed,
     // and the admin can give the pre-upgrade item an edition.
     define(f.as_account(), f.id(), "house-sword", 10, 3).await?;
+    let dep = mint_deposit(&f).await?; // the upgrade changed the deposit (it now includes the creation fee)
     f.call("mint").args_json(item_args("house-sword", Some(player.id()))).deposit(dep).max_gas().transact().await?.into_result()?;
     f.call("backfill_edition").args_json(json!({ "token_id": token_id, "item_type": "house-sword" })).transact().await?.into_result()?;
     let items: Value = f.view("get_items").args_json(json!({})).await?.json()?;
@@ -428,6 +429,12 @@ async fn open_supply_for_random_drops_then_seal_it() -> anyhow::Result<()> {
     let first = items.iter().find(|i| i["item_type"] == "goblin-axe").unwrap();
     assert_eq!(first["max_supply"], 3);
     assert_eq!(first["minted"], 3);
+
+    // LeaseKey earned its creation fee on each of the three copies, counted on chain.
+    let e: Value = f.view("get_earnings").await?.json()?;
+    assert_eq!(e["items_charged"], "3");
+    assert_eq!(e["create_fees"], (3 * NEAR / 100).to_string());
+    assert_eq!(e["rental_fee_bps"], 200);
     Ok(())
 }
 

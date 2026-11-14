@@ -235,7 +235,7 @@ LeaseKey's difference: the renter acts through a real key with no wallet and no 
 
 **What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it and returned when the owner retires the item. Renters pay rent plus a refundable 0.05 NEAR gas budget. No collateral.
 
-**How does LeaseKey make money?** A 2% fee on rent at settlement, paid by the item contract itself. The owner keeps the rest after the game's royalty. Renters pay no extra.
+**How does LeaseKey make money?** Two fees, both enforced on chain: 2% of every rent at settlement, paid by the item itself, and 0.01 NEAR per item created or wrapped. Owners keep the rest after the game's royalty, games earn that royalty on every lease, and renters pay nothing on top. The developer page has a calculator, and the contract reports its creation-fee earnings through `get_earnings`.
 
 </details>
 
@@ -275,6 +275,7 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 | Move a lease to another device | Arena: "Play on another device" copies a link that carries only that lease's play key |
 | Replace a lost play key from the renter's own account | test `renter_resets_a_lost_key_then_owner_retires_the_item`; My Items: "Get a new play key here" |
 | Retire an item and get its storage deposit back | same test; My Items: "Retire"; live run `npx tsx scripts/lifecycle.ts` |
+| LeaseKey earns 0.01 NEAR per item created and reports it with `get_earnings` | test `open_supply_for_random_drops_then_seal_it`; developer page "Who earns what" |
 | LeaseKey's 2% fee on settled rent | test `end_rental_deletes_key_splits_revenue_and_never_settles_twice`, unit test `split_math` |
 | Game-defined stats (attack, defence, speed, endurance…), fixed once set, used by the Arena | same test; Armory cards and item panel; Arena |
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |

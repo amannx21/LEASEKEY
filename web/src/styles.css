@@ -508,3 +508,27 @@ pre code { background: none; padding: 0; color: #e6dcff; font-size: inherit; }
 .stat-pick label { text-transform: capitalize; font-size: 13px; }
 
 button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); color: var(--bad); }
+
+/* who earns what */
+.earn { margin: 26px 0; }
+.earn-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.earn-head .muted { max-width: 640px; margin: 6px 0 0; }
+.earn-live { font-size: 13px; color: var(--muted); padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 99px; background: var(--well); }
+.earn-live .num { color: var(--gold-2); font-weight: 800; }
+.earn-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 26px; margin-top: 18px; }
+.earn-rules { display: grid; gap: 10px; align-content: start; }
+.earn-rules div { display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--well); }
+.earn-rules b { font-size: 14px; }
+.earn-rules span { font-size: 13.5px; color: var(--muted); }
+.earn-calc { display: grid; gap: 10px; }
+.earn-calc label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.earn-calc label b { color: var(--text); margin-left: 4px; }
+.earn-bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--well); border: 1px solid var(--line); margin-top: 6px; }
+.earn-bar i { display: block; height: 100%; transition: width 0.25s var(--ease); }
+.earn-out { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 4px 0 0; }
+.earn-out div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); padding: 6px 0; }
+.earn-out dt { color: var(--muted); font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+.earn-out dt i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.earn-out dd { margin: 0; font-weight: 800; }
+.earn-out small { color: var(--muted); font-weight: 600; }
+@media (max-width: 900px) { .earn-grid, .earn-out { grid-template-columns: 1fr; } }

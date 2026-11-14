@@ -36,6 +36,10 @@ use near_sdk::{
 pub const ITEM_FLOAT: u128 = 150_000_000_000_000_000_000_000; // 0.15 NEAR
 /// Kept by the factory per item to pay for NFT storage.
 pub const NFT_STORAGE: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
+/// LeaseKey's fee for every item created, minted or wrapped. Kept by the factory.
+pub const CREATE_FEE: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
+/// LeaseKey's share of every rent, charged by the item code at settlement (see the item contract).
+pub const RENTAL_FEE_BPS: u16 = 200; // 2%
 /// Deposit to register a game (pays for its registry entry).
 pub const GAME_DEPOSIT: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
 const WRAP_VIEW_GAS: Gas = Gas::from_tgas(5);
@@ -196,6 +200,16 @@ pub struct GameView {
 }
 
 #[near(serializers = [json])]
+pub struct Earnings {
+    /// Charged once per item created, minted or wrapped.
+    pub create_fee: U128,
+    /// Share of every rent, in basis points, paid by items at settlement.
+    pub rental_fee_bps: u16,
+    pub items_charged: U64,
+    pub create_fees: U128,
+}
+
+#[near(serializers = [json])]
 pub struct Config {
     pub admin: AccountId,
     pub item_code: ItemCode,
@@ -247,6 +261,15 @@ fn stats_map() -> RawMap<String, Vec<Stat>> {
 fn wrap_stats_map() -> RawMap<TokenId, Vec<Stat>> {
     RawMap::new(b"ws".to_vec())
 }
+/// LeaseKey's earnings from creation fees: (items charged, total yoctoNEAR).
+const EARNINGS_KEY: &[u8] = b"pe";
+fn add_create_fee() {
+    let (n, total): (u64, u128) = env::storage_read(EARNINGS_KEY)
+        .map(|b| near_sdk::borsh::from_slice(&b).unwrap_or((0, 0)))
+        .unwrap_or((0, 0));
+    env::storage_write(EARNINGS_KEY, &near_sdk::borsh::to_vec(&(n + 1, total + CREATE_FEE)).unwrap());
+}
+
 /// Stats rolled for one copy at mint, capped by its type.
 fn rolls_map() -> RawMap<TokenId, Vec<Stat>> {
     RawMap::new(b"rl".to_vec())
@@ -526,7 +549,7 @@ impl LeaseKey {
             ItemCode::Embedded { bytes } => *bytes as u128 * YOCTO_PER_BYTE,
             _ => 0,
         };
-        U128(ITEM_FLOAT + NFT_STORAGE + code)
+        U128(ITEM_FLOAT + NFT_STORAGE + CREATE_FEE + code)
     }
 
     /// A registered game mints an item to a player. The game is the creator:
@@ -620,6 +643,7 @@ impl LeaseKey {
             editions_map().insert(&token_id, e);
         }
         self.item_game.insert(token_id.clone(), game);
+        add_create_fee();
         Some(self.item_ref(token_id))
     }
 
@@ -666,6 +690,7 @@ impl LeaseKey {
         }
         self.tokens.internal_mint_with_refund(token_id.clone(), owner.clone(), Some(metadata), None);
         self.item_game.insert(token_id.clone(), origin.contract.clone());
+        add_create_fee();
         log!(
             r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"item_wrapped","data":{{"token_id":"{}","owner":"{}","origin_contract":"{}","origin_token_id":"{}"}}}}"#,
             token_id, owner, origin.contract, origin.token_id
@@ -806,6 +831,20 @@ impl LeaseKey {
             .find(|r| r.origin.as_ref().is_some_and(|o| o.contract == origin_contract && o.token_id == origin_token_id))
     }
 
+/// How LeaseKey earns: a fee per item created (counted here) and a share of every rent
+    /// (paid by each item at settlement straight to this account).
+    pub fn get_earnings(&self) -> Earnings {
+        let (items_charged, create_fees): (u64, u128) = env::storage_read(EARNINGS_KEY)
+            .map(|b| near_sdk::borsh::from_slice(&b).unwrap_or((0, 0)))
+            .unwrap_or((0, 0));
+        Earnings {
+            create_fee: U128(CREATE_FEE),
+            rental_fee_bps: RENTAL_FEE_BPS,
+            items_charged: U64(items_charged),
+            create_fees: U128(create_fees),
+        }
+    }
+
     pub fn get_config(&self) -> Config {
         Config {
             admin: self.admin.clone(),
@@ -887,7 +926,7 @@ impl LeaseKey {
 
         let create = Promise::new(item_account)
             .create_account()
-            .transfer(NearToken::from_yoctonear(deposit - NFT_STORAGE));
+            .transfer(NearToken::from_yoctonear(deposit - NFT_STORAGE - CREATE_FEE));
         let with_code = match &self.item_code {
             ItemCode::Global(hash) => create.use_global_contract(<[u8; 32]>::from(*hash)),
             ItemCode::Embedded { .. } => create.deploy_contract(

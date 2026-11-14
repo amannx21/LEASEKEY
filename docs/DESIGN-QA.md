@@ -367,3 +367,18 @@ Questions with existing answers, now also in the README's "Questions you might a
 These live in the item contract, so they apply to items created after the new item code was published (global contract `4bDc4x…`). Earlier items keep the rules they were made with; the app explains this if someone tries.
 
 Tests: `renter_resets_a_lost_key_then_owner_retires_the_item` plus the fee in the settlement tests and `split_math`; 20 sandbox tests pass. Live on testnet: `npx tsx scripts/lifecycle.ts` minted a Frost Bow copy, rented it, reset its key (new key plays, old key rejected), settled with the fee, and retired it, returning 0.149 NEAR to the owner.
+
+## 39. "We should have an earning model"
+
+**Answer:** LeaseKey now earns two ways, both enforced by contracts, and every party's share is visible.
+
+| Who | Earns |
+|---|---|
+| Item owners | Rent from every lease, minus the game's royalty and LeaseKey's 2% |
+| Games | The royalty they choose (up to 50%) on every lease of their items, in any game that honours them |
+| LeaseKey | 2% of each rent at settlement (item code, from 38) and 0.01 NEAR per item created or wrapped (factory) |
+| Renters | Pay rent and a refundable gas budget; no collateral and no fee on top |
+
+The creation fee is part of `mint_deposit`, so games, the Arena's rewards and wrapping pay it automatically, and a failed creation refunds it with the rest. The factory counts it on chain: `get_earnings` returns the fee, the rental share and the totals. The developer page has a "Who earns what" calculator (items, price, hours leased, royalty) with the live counter. Test: the earnings assertions in `open_supply_for_random_drops_then_seal_it`.
+
+Why these two: the rental share grows with real usage, and the creation fee grows with the catalogue, which covers LeaseKey's costs even before an item is first rented. Both are small enough that listing on LeaseKey stays cheaper than building a rental system.

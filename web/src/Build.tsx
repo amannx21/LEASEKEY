@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ARENA_GAME, FACTORY_ID, view, type ItemRef, type ItemView } from "./near";
 import { useChain } from "./store";
 import { AccountLink } from "./ui";
+import { Earnings } from "./Earnings";
 
 const SNIPPET_RENT = `import { LeaseKey, LeaseSession } from "@leasekey/sdk";
 
@@ -139,6 +140,8 @@ export function Build() {
           <pre><code>{SNIPPET_WRAP}</code></pre>
         </div>
       </section>
+
+      <Earnings />
 
       <section className="panel checker">
         <h3>Try the access check live</h3>
