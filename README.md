@@ -140,7 +140,7 @@ This rents an item for 60 seconds with a fresh throwaway account, strikes three 
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
-cd tests && cargo test         # 19 sandbox integration tests
+cd tests && cargo test         # 20 sandbox integration tests
 cd .. && cargo test            # unit tests for the rent, refund and split math
 ```
 
@@ -226,13 +226,13 @@ LeaseKey's difference: the renter acts through a real key with no wallet and no 
 
 **Who pays the owner when time is up?** Anyone can close a finished lease. The arena does it for its players, a keeper script does it on a schedule, and the next renter's rent closes it automatically.
 
-**I lost my browser data mid-lease.** "Play on another device" moves a lease with a link. Without it, the renter's own account can return the item early and get the unused time back.
+**I lost my browser data mid-lease.** The renter's own account replaces the lost play key with one click ("Get a new play key here"); the old key stops working at once. "Play on another device" moves a lease with a link instead.
 
 **Does an item work in more than one game?** Each game decides. Slime Arena honours LeaseKey Originals and Ember Realms items; any game honours its own. The game reads the item's stats and the lease in one call.
 
-**What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it. Renters pay rent plus a refundable 0.05 NEAR gas budget. No collateral.
+**What does it cost?** About 0.16 NEAR of storage per item, paid once by whoever creates it and returned when the owner retires the item. Renters pay rent plus a refundable 0.05 NEAR gas budget. No collateral.
 
-**How does LeaseKey make money?** Today it doesn't; owners and games keep everything. A small settlement fee is on the roadmap.
+**How does LeaseKey make money?** A 2% fee on rent at settlement, paid by the item contract itself. The owner keeps the rest after the game's royalty. Renters pay no extra.
 
 </details>
 
@@ -270,6 +270,9 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 | Random drops roll their own stats, never above the type's | test `drops_roll_their_own_stats_but_never_above_the_type`; Studio in My Items |
 | Renting an item whose last lease expired closes that lease first, in the same click | Armory: an expired item shows "Rent it" |
 | Move a lease to another device | Arena: "Play on another device" copies a link that carries only that lease's play key |
+| Replace a lost play key from the renter's own account | test `renter_resets_a_lost_key_then_owner_retires_the_item`; My Items: "Get a new play key here" |
+| Retire an item and get its storage deposit back | same test; My Items: "Retire"; live run `npx tsx scripts/lifecycle.ts` |
+| LeaseKey's 2% fee on settled rent | test `end_rental_deletes_key_splits_revenue_and_never_settles_twice`, unit test `split_math` |
 | Game-defined stats (attack, defence, speed, endurance…), fixed once set, used by the Arena | same test; Armory cards and item panel; Arena |
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
@@ -316,7 +319,9 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 | | Can | Cannot, and what stops it |
 |---|---|---|
 | **Renter's key** | Call `use_item` on its one item, until expiry or until its gas budget runs out | Call any other method or contract, move NEAR, or exceed its gas allowance. The NEAR protocol rejects these. |
-| **Owner during a lease** | Transfer the item; the lease continues and rent goes to whoever owns it at the end | Unlist, reprice, end the lease, revoke the key or unwrap. The item contract has no path for it. |
+| **Owner during a lease** | Transfer the item; the lease continues and rent goes to whoever owns it at the end | Unlist, reprice, end the lease, revoke the key, unwrap or retire. The item contract has no path for it. |
+| **Renter's own account** | Return early, extend, or replace a lost play key (`reset_key`) during the lease | Reset the key after expiry or for someone else's lease. |
+| **Owner, no lease running** | Retire the item: its account is deleted and its storage deposit returns to the owner | Retire while leased or while payouts are unclaimed. |
 | **Game** | Define types, mint copies (up to the cap if it set one), seal an open type, roll a drop's stats | Exceed a cap, reopen a sealed type, roll above the type, or change a type. The contract refuses. |
 
 - The factory account still has a full-access key held by the deployer, and was used once to upgrade the factory in place. A malicious deployer could upgrade it again and reassign item owners or release escrowed NFTs. Production would remove that key or hand it to a DAO. Item code itself is immutable because it is referenced by hash.
@@ -338,7 +343,6 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 
 - Publish the SDK to npm.
 - Several royalty receivers per item, for items honoured by more than one game.
-- A protocol fee on settlement, so LeaseKey itself is sustainable.
 - A second playable game, to show cross-game rules from both sides.
 - Renter reputation with a minimum-reputation setting per listing.
 - Gasless renting through meta transactions (NEP-366) and a relayer, so the renter needs no NEAR at all.

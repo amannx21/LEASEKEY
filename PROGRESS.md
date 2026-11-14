@@ -21,7 +21,7 @@ Deadline: 14 Nov 2026, 23:59 UTC. Last updated: 14 Nov 2026.
 - [x] Early return with pro-rata refund, 5% fee
 - [x] Revenue split: owner plus creator royalty, set at mint
 - [x] Item ledger view `get_item`
-- [x] near-workspaces tests for every P0 rule (19 passing, including games, wrapping, scarcity, open supply, rolled drops and loot drops)
+- [x] near-workspaces tests for every P0 rule (20 passing, including games, wrapping, scarcity, open supply, rolled drops, key reset, retiring and loot drops)
 - [x] Capped item types with fixed stats and editions; verified partner games
 - [x] Loot drops earned by on-chain play
 - [x] Scarcity-based price suggestion; Arena plays by item stats and game rules

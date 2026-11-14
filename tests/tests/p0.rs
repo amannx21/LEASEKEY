@@ -323,11 +323,13 @@ async fn end_rental_deletes_key_splits_revenue_and_never_settles_twice() -> anyh
     // Anyone (here: a keeper bot) can end an expired rental.
     let s: Value = keeper.call(&c.item, "end_rental").max_gas().transact().await?.json()?;
     let creator_cut = rent * ROYALTY_BPS / 10_000;
-    let owner_cut = rent - creator_cut;
+    let protocol_cut = rent * 200 / 10_000; // LeaseKey fee, 2%
+    let owner_cut = rent - creator_cut - protocol_cut;
     let gas_refund = GAS_BUDGET - 3 * USE_FEE;
     assert_eq!(s["rent_earned"], rent.to_string());
     assert_eq!(s["owner_cut"], owner_cut.to_string());
     assert_eq!(s["creator_cut"], creator_cut.to_string());
+    assert_eq!(s["protocol_cut"], protocol_cut.to_string());
     assert_eq!(s["renter_refund"], gas_refund.to_string());
 
     // Split math: exact amounts arrive.
@@ -415,7 +417,7 @@ async fn owner_cannot_rug_during_rental() -> anyhow::Result<()> {
     c.expire().await?;
     let buyer_before = c.balance(buyer.id()).await?;
     c.renter.call(&c.item, "end_rental").max_gas().transact().await?.into_result()?;
-    let owner_cut = rent - rent * ROYALTY_BPS / 10_000;
+    let owner_cut = rent - rent * ROYALTY_BPS / 10_000 - rent * 200 / 10_000; // after the 10% royalty and the 2% LeaseKey fee
     assert_eq!(c.balance(buyer.id()).await? - buyer_before, owner_cut);
     Ok(())
 }
@@ -449,7 +451,8 @@ async fn early_return_refunds_unused_time_pro_rata() -> anyhow::Result<()> {
 
     // Earned part is split like any rent.
     let creator_cut = earned * ROYALTY_BPS / 10_000;
-    assert_eq!(c.balance(c.owner.id()).await? - owner_before, earned - creator_cut);
+    let protocol_cut = earned * 200 / 10_000;
+    assert_eq!(c.balance(c.owner.id()).await? - owner_before, earned - creator_cut - protocol_cut);
     assert_eq!(c.balance(c.creator.id()).await? - creator_before, creator_cut);
 
     // Lease is over: key deleted, cannot be used or settled again.
@@ -573,5 +576,44 @@ async fn extend_adds_time_and_rent() -> anyhow::Result<()> {
     let s: Value = c.owner.call(&c.item, "end_rental").max_gas().transact().await?.json()?;
     assert_eq!(s["rent_earned"], (PRICE_PER_HOUR * 60 / 3600 + extra_cost).to_string());
     assert!(!c.has_key(&sk).await);
+    Ok(())
+}
+
+#[tokio::test]
+async fn renter_resets_a_lost_key_then_owner_retires_the_item() -> anyhow::Result<()> {
+    let c = setup(Mode::Global).await?;
+    let stranger = c.worker.dev_create_account().await?;
+    let (old, _) = c.rent(120).await?;
+    c.use_item(&old).await?;
+
+    // Lost device: only the renter's own account can install a new play key.
+    let sk = SecretKey::from_random(KeyType::ED25519);
+    let r = stranger.call(&c.item, "reset_key").args_json(json!({ "public_key": sk.public_key() })).transact().await?;
+    assert!(r.is_failure());
+    c.renter.call(&c.item, "reset_key").args_json(json!({ "public_key": sk.public_key() }))
+        .max_gas().transact().await?.into_result()?;
+    let fresh = Account::from_secret_key(c.item.clone(), sk, &c.worker);
+    c.use_item(&fresh).await?;
+    let r = old.call(&c.item, "use_item").args_json(json!({ "action": "attack" })).transact().await;
+    assert!(r.is_err() || r.unwrap().is_failure(), "the old key is gone");
+
+    // The owner cannot retire an item on lease.
+    let retire = |who: &Account| who.call(c.factory.id(), "retire")
+        .args_json(json!({ "token_id": c.token_id })).deposit(NearToken::from_yoctonear(1)).max_gas().transact();
+    assert!(retire(&c.owner).await?.is_failure());
+
+    c.expire().await?;
+    stranger.call(&c.item, "end_rental").max_gas().transact().await?.into_result()?;
+    assert!(retire(&stranger).await?.is_failure(), "only the owner retires");
+
+    // Retiring deletes the item account and returns its storage deposit to the owner.
+    let before = c.balance(c.owner.id()).await?;
+    let ok: bool = retire(&c.owner).await?.json()?;
+    assert!(ok);
+    let after = c.balance(c.owner.id()).await?;
+    assert!(after > before + 10_u128.pow(22), "storage deposit returned: {}", after - before);
+    assert!(c.worker.view_account(&c.item).await.is_err(), "item account deleted");
+    let items: Vec<Value> = c.factory.view("get_items").args_json(json!({})).await?.json()?;
+    assert!(items.iter().all(|i| i["token_id"] != c.token_id.as_str()), "retired item no longer listed");
     Ok(())
 }

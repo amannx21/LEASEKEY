@@ -23,6 +23,8 @@ pub const USE_FEE: u128 = 500_000_000_000_000_000_000; // 0.0005 NEAR (measured 
 pub const MIN_GAS_BUDGET: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR
 /// Fee kept (as earnings) from the refund when a renter returns early.
 pub const EARLY_RETURN_FEE_BPS: u128 = 500; // 5%
+/// LeaseKey's share of earned rent, paid to the factory on every settlement.
+pub const PROTOCOL_FEE_BPS: u128 = 200; // 2%
 /// Shortest rental. Short enough for a live demo.
 pub const MIN_RENT_SECS: u64 = 60;
 /// Price of a repair, per durability point restored.
@@ -107,6 +109,8 @@ pub struct Settlement {
     pub rent_earned: U128,
     pub owner_cut: U128,
     pub creator_cut: U128,
+    /// LeaseKey's fee, paid to the factory.
+    pub protocol_cut: U128,
     pub renter_refund: U128,
     pub early: bool,
 }
@@ -157,10 +161,11 @@ pub fn early_return_split(rent_paid: u128, starts_at: u64, ends_at: u64, now: u6
     (rent_paid - refund, refund)
 }
 
-/// Split of earned rent. Returns (owner cut, creator cut).
-pub fn revenue_split(earned: u128, royalty_bps: u16) -> (u128, u128) {
+/// Split of earned rent. Returns (owner cut, creator cut, protocol cut).
+pub fn revenue_split(earned: u128, royalty_bps: u16) -> (u128, u128, u128) {
     let creator = earned * royalty_bps as u128 / 10_000;
-    (earned - creator, creator)
+    let protocol = earned * PROTOCOL_FEE_BPS / 10_000;
+    (earned - creator - protocol, creator, protocol)
 }
 
 #[near]
@@ -402,6 +407,38 @@ impl Item {
         self.settle(rental, earned, refund, true)
     }
 
+    /// The renter's own account replaces a lost play key during the lease, for example after
+    /// clearing the browser or switching devices. The new key gets the same limits and what is
+    /// left of the gas budget; the old key stops working at once.
+    pub fn reset_key(&mut self, public_key: PublicKey) -> Rental {
+        let mut rental = self.rental.clone().unwrap_or_else(|| env::panic_str("item is not rented"));
+        require!(env::predecessor_account_id() == rental.renter, "only the renter's own account can reset the play key");
+        require!(now_ms() < rental.ends_at.0, "lease already expired");
+        require!(public_key != rental.renter_pk, "that is already the play key");
+        let left = rental.gas_budget.0.saturating_sub(rental.uses as u128 * USE_FEE);
+        require!(left > 0, "the gas budget is used up");
+        let me = env::current_account_id();
+        Promise::new(me.clone())
+            .delete_key(rental.renter_pk.clone())
+            .add_access_key_allowance(public_key.clone(), Allowance::limited(NearToken::from_yoctonear(left)).unwrap(), me, "use_item")
+            .detach();
+        rental.renter_pk = public_key;
+        self.rental = Some(rental.clone());
+        self.emit("key_reset", &format!(r#""renter":"{}""#, rental.renter));
+        rental
+    }
+
+    /// The factory retires the item for its owner: the account is deleted and everything it
+    /// holds, including the storage deposit, goes to the owner. Only when it is not leased and
+    /// owes nobody anything.
+    pub fn retire(&mut self) -> Promise {
+        require!(env::predecessor_account_id() == self.factory, "only the factory can retire an item");
+        require!(self.rental.is_none(), "cannot retire an item on lease; settle the lease first");
+        require!(self.unclaimed.is_empty(), "cannot retire while payouts are unclaimed");
+        self.emit("item_retired", &format!(r#""owner":"{}""#, self.owner));
+        Promise::new(env::current_account_id()).delete_account(self.owner.clone())
+    }
+
     /// Anyone can end an expired rental: deletes the session key and pays everyone.
     pub fn end_rental(&mut self) -> Settlement {
         let rental = self.rental.clone().unwrap_or_else(|| env::panic_str("no rental to end"));
@@ -500,7 +537,7 @@ impl Item {
         self.rental = None;
         let gas_used = (rental.uses as u128 * USE_FEE).min(rental.gas_budget.0);
         let renter_refund = rent_refund + (rental.gas_budget.0 - gas_used);
-        let (owner_cut, creator_cut) = revenue_split(earned, self.royalty_bps);
+        let (owner_cut, creator_cut, protocol_cut) = revenue_split(earned, self.royalty_bps);
         self.lifetime_earnings += earned;
         self.owner_earnings += owner_cut;
         self.creator_earnings += creator_cut;
@@ -508,13 +545,14 @@ impl Item {
         Promise::new(env::current_account_id()).delete_key(rental.renter_pk.clone()).detach();
         self.pay(self.owner.clone(), owner_cut);
         self.pay(self.creator.clone(), creator_cut);
+        self.pay(self.factory.clone(), protocol_cut);
         self.pay(rental.renter.clone(), renter_refund);
 
         self.emit(
             "rental_settled",
             &format!(
-                r#""renter":"{}","rent_earned":"{}","owner_cut":"{}","creator_cut":"{}","renter_refund":"{}","early":{}"#,
-                rental.renter, earned, owner_cut, creator_cut, renter_refund, early
+                r#""renter":"{}","rent_earned":"{}","owner_cut":"{}","creator_cut":"{}","protocol_cut":"{}","renter_refund":"{}","early":{}"#,
+                rental.renter, earned, owner_cut, creator_cut, protocol_cut, renter_refund, early
             ),
         );
         Settlement {
@@ -522,6 +560,7 @@ impl Item {
             rent_earned: U128(earned),
             owner_cut: U128(owner_cut),
             creator_cut: U128(creator_cut),
+            protocol_cut: U128(protocol_cut),
             renter_refund: U128(renter_refund),
             early,
         }
@@ -569,9 +608,9 @@ mod tests {
 
     #[test]
     fn split_math() {
-        assert_eq!(revenue_split(1_000_000, 1000), (900_000, 100_000));
-        assert_eq!(revenue_split(1_000_000, 0), (1_000_000, 0));
-        let (o, c) = revenue_split(999, 250);
-        assert_eq!(o + c, 999);
+        assert_eq!(revenue_split(1_000_000, 1000), (880_000, 100_000, 20_000));
+        assert_eq!(revenue_split(1_000_000, 0), (980_000, 0, 20_000));
+        let (o, c, p) = revenue_split(999, 250);
+        assert_eq!(o + c + p, 999, "nothing is lost to rounding");
     }
 }

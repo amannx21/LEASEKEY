@@ -152,6 +152,8 @@ export type Settlement = {
   rent_earned: string;
   owner_cut: string;
   creator_cut: string;
+  /** LeaseKey's 2% fee. Absent on items created before the fee existed. */
+  protocol_cut?: string;
   renter_refund: string;
   early: boolean;
 };
@@ -288,6 +290,8 @@ export function errorText(e: unknown): string {
     return "Not enough NEAR in this account for that. Nothing was charged. Pick a shorter time or add testnet NEAR.";
   if (isRateLimited(e) || /Exceeded \d+ providers/i.test(raw))
     return "The NEAR testnet servers are busy right now. Nothing was charged. Try again in a few seconds.";
+  if (/MethodNotFound|MethodResolveError/i.test(raw))
+    return "This item was made before that feature existed, and an item's rules never change after it is made.";
   if (/MethodNameMismatch|isn.t allowed by the access key/i.test(raw))
     return "this access key may only call use_item";
   if (/ReceiverMismatch|InvalidAccessKey|receiver/i.test(raw))

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ART_KEYS, artUrl, lookOf } from "./catalog";
 import {
   DEMO_COLLECTION, FACTORY_ID, TGAS, call, fmtNear, parseNear, sessionKeyFor, suggestedPrice, view,
-  type ItemView, type Settlement, copiesOf,
+  type ItemView, type Settlement, copiesOf, newSessionKey,
 } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
@@ -85,6 +85,7 @@ export function MyItems() {
 function OwnedRow({ item }: { item: ItemView }) {
   const c = useChain();
   const status = statusOf(item);
+  const [retiring, setRetiring] = useState(false);
   const [price, setPrice] = useState(fmtNear(item.price_per_hour, 4));
   const act = (label: string, method: string, args: Record<string, unknown> = {}, deposit = 0n) =>
     c.run(label, (me) => call(me, item.account_id, method, args, deposit));
@@ -157,6 +158,26 @@ function OwnedRow({ item }: { item: ItemView }) {
             Unwrap
           </button>
         )}
+        {!item.origin && !item.renter && (
+          retiring ? (
+            <button
+              className="ghost danger"
+              disabled={!!c.busy}
+              title="Deletes the item for good and returns its storage deposit to you"
+              onClick={() =>
+                c.run("Retiring…", async (me) => {
+                  await call(me, FACTORY_ID, "retire", { token_id: item.token_id }, 1n, 100n * TGAS);
+                  c.toast("ok", `${item.name} is retired. Its account is closed and its storage deposit is back in your account.`);
+                })}
+            >
+              Confirm: retire for good
+            </button>
+          ) : (
+            <button className="ghost" disabled={!!c.busy} title="Close this item's account and get its storage deposit back" onClick={() => setRetiring(true)}>
+              Retire
+            </button>
+          )
+        )}
         {status === "rented" && (
           <button className="ghost" disabled={!!c.busy} onClick={() => act("Trying to unlist…", "unlist")}>
             Try to unlist (will be rejected)
@@ -193,11 +214,32 @@ function RentedRow({ item }: { item: ItemView }) {
           <span>{item.uses} uses · {item.uses_left} left in gas budget</span>
           <span>Rent paid {fmtNear(item.rent_paid, 4)} NEAR</span>
         </div>
-        {!hasKey && <p className="warn">The session key for this lease is in another browser.</p>}
+        {!hasKey && status === "rented" && (
+          <p className="warn">The play key for this lease is in another browser. Open a play link from there, or get a new key here.</p>
+        )}
       </div>
       <div className="row-actions">
         {status === "rented" && hasKey && (
           <button className="primary" onClick={() => c.playWith(item.account_id)}>Fight</button>
+        )}
+        {status === "rented" && !hasKey && (
+          <button
+            className="primary"
+            disabled={!!c.busy}
+            title="Your account replaces the lost play key. The old one stops working."
+            onClick={async () => {
+              const done = await c.run("Getting a new play key…", async (me) => {
+                await call(me, item.account_id, "reset_key", { public_key: newSessionKey(item.account_id).getPublicKey().toString() });
+                return true;
+              });
+              if (done) {
+                c.toast("ok", "New play key ready on this device. The old one no longer works.");
+                c.playWith(item.account_id);
+              }
+            }}
+          >
+            Get a new play key here
+          </button>
         )}
         {status === "rented" && (
           <button

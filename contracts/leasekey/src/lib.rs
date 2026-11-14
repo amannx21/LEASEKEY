@@ -60,6 +60,7 @@ const SET_OWNER_GAS: Gas = Gas::from_tgas(8);
 const UNWRAP_GAS: Gas = Gas::from_tgas(10);
 const NFT_TRANSFER_GAS: Gas = Gas::from_tgas(15);
 const RELEASE_CALLBACK_GAS: Gas = Gas::from_tgas(10);
+const RETIRE_GAS: Gas = Gas::from_tgas(20);
 
 #[derive(BorshStorageKey)]
 #[near]
@@ -717,6 +718,36 @@ impl LeaseKey {
         self.tokens.internal_transfer_unguarded(&token_id, &owner, &me);
         let origin = self.origins.remove(&token_id).unwrap_or_else(|| env::panic_str("origin missing"));
         self.release(origin, token_id, owner);
+    }
+
+    /// Retires an item its owner no longer wants. The item account is deleted, so its storage
+    /// deposit and anything else it holds go back to the owner, and the NFT is retired with it.
+    /// Not while it is leased or owes payouts. Wrapped items use `unwrap`, which also returns the original.
+    #[payable]
+    pub fn retire(&mut self, token_id: TokenId) -> Promise {
+        assert_one_yocto();
+        let owner = self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::panic_str("no such token"));
+        require!(env::predecessor_account_id() == owner, "only the owner can retire an item");
+        require!(!self.origins.contains_key(&token_id), "this item is wrapped: unwrap it to get the original NFT back");
+        let me = env::current_account_id();
+        Promise::new(self.item_account(token_id.clone()))
+            .function_call("retire".to_string(), b"{}".to_vec(), NearToken::from_yoctonear(0), RETIRE_GAS)
+            .then(Self::ext(me).with_static_gas(RELEASE_CALLBACK_GAS).on_retire(token_id, owner))
+    }
+
+    #[private]
+    pub fn on_retire(&mut self, token_id: TokenId, owner: AccountId, #[callback_result] result: Result<(), PromiseError>) -> bool {
+        if result.is_err() {
+            env::panic_str("cannot retire: the item is on lease, owes payouts, or was created before retiring existed");
+        }
+        // The account is gone; the token moves to the factory, which hides it like an unwrapped item.
+        let me = env::current_account_id();
+        self.tokens.internal_transfer_unguarded(&token_id, &owner, &me);
+        log!(
+            r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"item_retired","data":{{"token_id":"{}","owner":"{}"}}}}"#,
+            token_id, owner
+        );
+        true
     }
 
     #[private]

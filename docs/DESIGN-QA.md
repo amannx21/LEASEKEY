@@ -355,3 +355,15 @@ Questions with existing answers, now also in the README's "Questions you might a
 **Not fixed, on purpose:**
 - Items run immutable code referenced by hash, so lease rules for existing items can never change under an owner or renter. The flip side is that item-level features (for example renter-side key rotation in the contract) only reach new items; the device link covers that need without a contract change.
 - Retiring an item to recover its ~0.16 NEAR of storage is not built. Items are meant to live on.
+
+## 38. Closing the three gaps left open in 37
+
+**Business model.** Items created from now on pay LeaseKey 2% of earned rent at settlement, to the factory. The owner keeps the rest after the game's royalty, and renters pay nothing extra. Settlements report `protocol_cut`.
+
+**Lost play key.** New items have `reset_key`: during an active lease the renter's own account swaps the play key for a new one with what is left of the gas budget, and the old key stops working at once. My Items shows "Get a new play key here" when the lease's key is in another browser. The device link from 37 still works for every item.
+
+**Retiring an item.** `retire` on the factory, owner only, not while leased or owing payouts: the item account is deleted, its balance including the ~0.15 NEAR storage deposit goes to the owner, and the NFT is retired like an unwrapped one. Wrapped items keep using `unwrap`, which also returns the original NFT.
+
+These live in the item contract, so they apply to items created after the new item code was published (global contract `4bDc4x…`). Earlier items keep the rules they were made with; the app explains this if someone tries.
+
+Tests: `renter_resets_a_lost_key_then_owner_retires_the_item` plus the fee in the settlement tests and `split_math`; 20 sandbox tests pass. Live on testnet: `npx tsx scripts/lifecycle.ts` minted a Frost Bow copy, rented it, reset its key (new key plays, old key rejected), settled with the fee, and retired it, returning 0.149 NEAR to the owner.
