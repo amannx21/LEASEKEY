@@ -5,7 +5,7 @@ import {
   type ItemView, type Settlement,
 } from "./near";
 import { useChain } from "./store";
-import { AccountLink, Countdown, Durability, Icon, StatusBadge, statusOf } from "./ui";
+import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
 
 type Tab = "own" | "rent" | "wrap" | "studio";
 
@@ -229,6 +229,17 @@ function RentedRow({ item }: { item: ItemView }) {
 // ---------------------------------------------------------------- wrapping
 
 type Nft = { token_id: string; metadata?: { title?: string; media?: string } };
+type CatalogEntry = { type_id: string; name: string; image: string; power: number; stats: { name: string; value: number }[] };
+/** Same slug rule as the contract: a game's catalogue id is the slug of the NFT's title. */
+const slugOf = (s: string) => {
+  let out = "";
+  for (const ch of s.toLowerCase()) {
+    if (/[a-z0-9]/.test(ch)) out += ch;
+    else if (out && !out.endsWith("-")) out += "-";
+    if (out.length >= 24) break;
+  }
+  return out.replace(/-+$/, "") || "item";
+};
 
 const EMBER_RELICS = [
   ["Ember Greataxe", "flame-sword"],
@@ -243,8 +254,25 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
   const [collection, setCollection] = useState(DEMO_COLLECTION);
   const [nfts, setNfts] = useState<Nft[] | null>(null);
   const [pick, setPick] = useState<Nft | null>(null);
-  const [name, setName] = useState("");
   const [price, setPrice] = useState("0.08");
+  // The game's catalogue: what each of its items is, with stats. Null when the collection is not integrated.
+  const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
+  const [gameName, setGameName] = useState<string | null>(null);
+  useEffect(() => {
+    setCatalog(null);
+    setGameName(null);
+    if (!collection) return;
+    view<{ name: string } | null>(FACTORY_ID, "get_game", { account_id: collection }).then(async (g) => {
+      if (!g) return;
+      setGameName(g.name);
+      const types = await view<CatalogEntry[]>(FACTORY_ID, "get_item_types", { game: collection });
+      const withStats = await Promise.all(types.map(async (t) => ({
+        ...t, stats: await view<{ name: string; value: number }[]>(FACTORY_ID, "get_type_stats", { game: collection, type_id: t.type_id }),
+      })));
+      setCatalog(withStats);
+    }, () => {});
+  }, [collection]);
+  const entry = pick ? catalog?.find((t) => t.type_id === slugOf(pick.metadata?.title ?? "")) ?? null : null;
 
   const load = useCallback(async () => {
     setNfts(null);
@@ -264,19 +292,14 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
 
   const wrap = async () => {
     if (!pick) return;
-    const ok = await c.run(`Wrapping ${name || pick.metadata?.title}…`, async (who) => {
+    const ok = await c.run(`Wrapping ${pick.metadata?.title}…`, async (who) => {
       const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
       const credit = BigInt(await view<string>(FACTORY_ID, "get_wrap_credit", { account_id: who.accountId }));
       if (credit < deposit) await call(who, FACTORY_ID, "deposit_for_wrap", {}, deposit - credit, 10n * TGAS);
       await call(who, collection, "nft_transfer_call", {
         receiver_id: FACTORY_ID,
         token_id: pick.token_id,
-        msg: JSON.stringify({
-          name: name || pick.metadata?.title || `Relic #${pick.token_id}`,
-          image: pick.metadata?.media ?? "",
-          price_per_hour: parseNear(price).toString(),
-          royalty_bps: 500,
-        }),
+        msg: JSON.stringify({ price_per_hour: parseNear(price).toString(), royalty_bps: 500 }),
       }, 1n, 150n * TGAS);
       return true;
     });
@@ -291,7 +314,7 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
       <section className="panel">
         <h3>Bring an item you already own</h3>
         <p className="muted">
-          Pick an NFT from any NEAR game collection. LeaseKey holds it in escrow and gives it its own rentable account.
+          Pick an item you own in a game that is integrated with LeaseKey. LeaseKey holds it in escrow and gives it its own rentable account, with the stats that game defined.
           Unwrap it any time it is not on lease to get the original back. Costs about 0.16 testnet NEAR, refunded if
           anything fails.
         </p>
@@ -303,19 +326,28 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
         <div className="nft-pick">
           {nfts?.map((n) => (
             <button key={n.token_id} className={pick?.token_id === n.token_id ? "on" : ""}
-              onClick={() => { setPick(n); setName(n.metadata?.title ?? ""); }}>
+              onClick={() => setPick(n)}>
               <img src={artUrl(n.metadata?.media ?? "")} alt="" />
               <span>{n.metadata?.title ?? `#${n.token_id}`}</span>
             </button>
           ))}
         </div>
-        {pick && (
+        {collection && !gameName && (
+          <p className="warn">This collection is not integrated with LeaseKey yet, so its items cannot be rented here.</p>
+        )}
+        {pick && gameName && !entry && (
+          <p className="warn">{gameName} has not added “{pick.metadata?.title}” to its catalogue yet, so it cannot be wrapped.</p>
+        )}
+        {pick && entry && (
           <div className="wrap-form">
-            <label>Name in LeaseKey<input value={name} maxLength={48} onChange={(e) => setName(e.target.value)} /></label>
-            <label>Price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
+            <div className="sheet-stats">
+              <h3>{entry.name}, as defined by {gameName}</h3>
+              <StatBars stats={entry.stats} />
+            </div>
+            <label>Your price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
             <p className="fine">
-              You set the name and the price. Power and stats are never set by the owner: the item's original game
-              rates it, and until then it plays at base power.
+              You only set the price. The name, art, power and stats come from {gameName}'s own catalogue, so every
+              renter sees the real item.
             </p>
             <button className="primary big wide" disabled={!!c.busy} onClick={wrap}>Wrap and make rentable <Icon name="arrow" /></button>
             <p className="fine">Two signatures: a refundable deposit for the item's account, then the NFT transfer into escrow.</p>

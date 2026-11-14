@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FACTORY_ID, HOUSE_GAME, view, type ItemRef, type ItemView } from "./near";
+import { useEffect, useState } from "react";
+import { ARENA_GAME, FACTORY_ID, view, type ItemRef, type ItemView } from "./near";
 import { useChain } from "./store";
 import { AccountLink } from "./ui";
 
@@ -22,7 +22,7 @@ if (access.ok) equip(itemId, access.power, access.endsAt);`;
 
 const SNIPPET_WRAP = `// Players can bring NFTs they already own in YOUR collection:
 const [deposit, transfer] = await lk.wrapActions(
-  "your-game-items.testnet", tokenId, { name: "Dragon Lance", pricePerHour: 10n ** 23n },
+  "your-game-items.testnet", tokenId, { pricePerHour: 10n ** 23n },   // stats come from your catalogue
 );
 // Later, your game finds the wrapper of its own NFT:
 const wrapped = await lk.findWrapped("your-game-items.testnet", tokenId);`;
@@ -31,7 +31,19 @@ export function Build() {
   const c = useChain();
   const [itemId, setItemId] = useState(c.items[0]?.account_id ?? "");
   const [player, setPlayer] = useState(c.me?.accountId ?? "");
-  const [games, setGames] = useState(HOUSE_GAME);
+  // The game doing the check, and the list of games it has chosen to accept.
+  const [allGames, setAllGames] = useState<{ account_id: string; name: string }[]>([]);
+  const [checker, setChecker] = useState(ARENA_GAME);
+  const [accepts, setAccepts] = useState<string[]>([]);
+  useEffect(() => {
+    view<{ account_id: string; name: string }[]>(FACTORY_ID, "get_games").then(setAllGames, () => {});
+  }, []);
+  useEffect(() => {
+    // Slime Arena publishes its accepted list on chain. Any other game accepts only its own items by default.
+    if (checker === ARENA_GAME) view<{ accepted_games: string[] }>(ARENA_GAME, "get_rules").then((r) => setAccepts(r.accepted_games), () => setAccepts([checker]));
+    else setAccepts([checker]);
+  }, [checker]);
+  const nameOf = (id: string) => allGames.find((g) => g.account_id === id)?.name ?? id;
   const [result, setResult] = useState<string | null>(null);
 
   const check = async () => {
@@ -41,10 +53,9 @@ export function Build() {
         view<ItemView>(itemId, "get_item"),
         view<ItemRef | null>(FACTORY_ID, "get_item_ref", { token_id: itemId.split(".")[0] }),
       ]);
-      const allowed = games.split(",").map((g) => g.trim()).filter(Boolean);
       const game = ref?.game ?? null;
-      if (allowed.length && (!game || !allowed.includes(game))) {
-        setResult(`No. ${i.name} belongs to ${ref?.game_name ?? game ?? "an unregistered game"}, which your game does not accept.`);
+      if (!game || !accepts.includes(game)) {
+        setResult(`No. ${i.name} belongs to ${ref?.game_name ?? game ?? "an unregistered game"}, and ${nameOf(checker)} does not accept that game's items.`);
       } else if (i.renter === player && i.rental_active) {
         setResult(`Yes, as renter until ${new Date(Number(i.ends_at)).toLocaleTimeString()}. Power ${i.power}.`);
       } else if (i.owner === player && !i.renter) {
@@ -98,9 +109,17 @@ export function Build() {
             </select>
           </label>
           <label>Player account<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
-          <label>Games your game accepts<input value={games} onChange={(e) => setGames(e.target.value)} placeholder="comma separated, blank for any" /></label>
+          <label>Game doing the check
+            <select value={checker} onChange={(e) => setChecker(e.target.value)}>
+              {allGames.map((g) => <option key={g.account_id} value={g.account_id}>{g.name}</option>)}
+            </select>
+          </label>
         </div>
-        <button className="primary" onClick={check} disabled={!itemId || !player}>Can this player use it?</button>
+        <p className="fine">
+          {nameOf(checker)} accepts items from: {accepts.map(nameOf).join(", ") || "…"}.
+          {checker === ARENA_GAME ? " It chose this list itself and stores it on chain." : " By default a game accepts only its own items."}
+        </p>
+        <button className="primary" onClick={check} disabled={!itemId || !player}>Can this player use it in {nameOf(checker)}?</button>
         {result && <p className="check-out" role="status">{result}</p>}
         <p className="fine">
           The SDK lives in <code>sdk/</code> of the repo. Run <code>npm run sdk:example</code> for a full rent, play and return

@@ -19,7 +19,7 @@ Owners sit on idle items. Players who cannot afford them cannot play.
 2. **Renting never moves the NFT.** The item account adds a **function-call access key** for the renter, restricted to `receiver_id = the item account` and `method_names = ["use_item"]`. The renter can play. The renter cannot transfer, sell, unlist or withdraw, because the protocol itself rejects those transactions.
 3. **Expiry is enforced in code.** NEAR keys do not expire, so `use_item` checks the block time and the signing key. After expiry anyone can call `end_rental`, which deletes the key and pays everyone.
 4. **Rent is escrowed in the item account** and split automatically between the owner and the game creator.
-5. **Only games create items, scarcity is enforced, and any NFT can join.** Registered games define each item type once, with its stats and a hard cap on how many can ever exist, then mint editions to their players and earn a royalty on every rental. Nobody can mint past the cap or mint a stronger copy, so scarce items stay scarce and worth renting. Players can also **wrap** an NFT they already own in any NEAR game collection: LeaseKey holds the original in escrow, gives it a rentable account, and returns it on unwrap.
+5. **Only games create items, scarcity is enforced, and any NFT can join.** Registered games define each item type once, with its stats and a hard cap on how many can ever exist, then mint editions to their players and earn a royalty on every rental. Nobody can mint past the cap or mint a stronger copy, so scarce items stay scarce and worth renting. Players can also **wrap** an NFT they already own in an integrated game's collection: LeaseKey holds the original in escrow, gives it a rentable account with the stats that game defined, and returns it on unwrap.
 6. **Players never notice the chain.** The session key lives in the browser, signs as the item account, and the item account pays the gas. Every sword strike in the demo game is a real transaction with no wallet pop-up.
 
 ### Why this only works on NEAR
@@ -177,7 +177,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
 | Rent guided by scarcity | My Items: "Suggest" price from supply and power |
 | A game is a separate contract using only LeaseKey's public interface: Slime Arena chooses which games' items it honours and rewards its players by calling the ordinary `mint`. LeaseKey itself never hands out items | test `a_separate_game_contract_rewards_its_players_through_public_mint`; Arena "Slime Arena reward"; `npx tsx scripts/drop-check.ts` |
-| Owners cannot rate their own wrapped items: only the original game sets stats, once | test `wrap_any_nft_rent_it_then_unwrap_it` |
+| Wrapped items take their name, art, power and stats from their game's catalogue. Owners set only the price, and collections that are not integrated games are refused | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
 | Owner and game shown on every item; "Mine" filter | Armory page |
@@ -234,7 +234,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 - The wallet path uses NEAR Wallet Selector with MyNearWallet and Meteor. The automated checks and our manual run-through exercised the guest path; the wallet path is implemented but less tested.
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
 - Wrapping costs the same as a mint and is prepaid with `deposit_for_wrap`, because an NFT transfer carries no NEAR. Unused credit can be withdrawn.
-- Items store a generic `power` and durability. Game-specific stats stay with the game, or in the original NFT for wrapped items.
+- A wrapped NFT is matched to its game's catalogue by its title, so a game must define an item type for each kind of NFT it wants rentable.
 - Slime Arena's reward rolls prove paid play, not skill: the contract counts on-chain strikes, which a script could send. Rewards are bounded by the supply caps and paid from the game contract's own balance.
 - The session key's gas allowance covers roughly eight strikes in flight at once. Faster bursts fail until earlier ones confirm.
 - Not audited. Testnet only.

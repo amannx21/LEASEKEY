@@ -53,3 +53,35 @@ const out = JSON.parse(readFileSync(DEPLOYMENT_FILE, "utf8"));
 out.arenaGame = arenaId;
 writeFileSync(DEPLOYMENT_FILE, JSON.stringify(out, null, 2) + "\n");
 console.log(`Slime Arena is live at ${arenaId}; accepts ${accepted.join(", ")}`);
+
+// Ember Realms, the partner game, publishes its catalogue: every item it has, with stats.
+// Wrapped Ember items pick these up automatically; the owner only sets a price.
+const EMBER = [
+  { name: "Ember Greataxe", image: "flame-sword.svg", power: 44, stats: [["attack", 44], ["defence", 9], ["speed", 14], ["endurance", 22]] },
+  { name: "Abyssal Trident", image: "tide-trident.svg", power: 40, stats: [["attack", 40], ["defence", 16], ["speed", 12], ["endurance", 28]] },
+  { name: "Starforged Gauntlet", image: "astral-gauntlet.svg", power: 58, stats: [["attack", 58], ["defence", 18], ["speed", 16], ["endurance", 34]] },
+  { name: "Halo of the Seraph", image: "seraph-helm.svg", power: 26, stats: [["attack", 6], ["defence", 32], ["speed", 12], ["endurance", 40]] },
+];
+if (d.demoCollection) {
+  const ember = accountFor(d.demoCollection);
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24).replace(/-$/, "");
+  const defined = new Set((await view<any[]>(d.factoryId, "get_item_types", { game: d.demoCollection })).map((t) => t.type_id));
+  for (const e of EMBER) {
+    if (defined.has(slug(e.name))) continue;
+    await ember.callFunction({
+      contractId: d.factoryId, methodName: "define_item_type",
+      args: { type_id: e.name, name: e.name, image: e.image, power: e.power, max_supply: 10000, stats: e.stats.map(([name, value]) => ({ name, value })) },
+      deposit: near("0.01"),
+    });
+    console.log(`Ember Realms catalogue: ${e.name}`);
+  }
+  // Items wrapped before the catalogue existed get their stats from the game now.
+  for (const ref of await view<any[]>(d.factoryId, "get_items", { limit: 100 })) {
+    if (ref.origin?.contract !== d.demoCollection || ref.stats.length) continue;
+    const item = await view<any>(ref.item_account, "get_item");
+    const e = EMBER.find((x) => x.name === item.name);
+    if (!e) continue;
+    await ember.callFunction({ contractId: d.factoryId, methodName: "rate_wrapped", args: { token_id: ref.token_id, stats: e.stats.map(([name, value]) => ({ name, value })) } });
+    console.log(`rated earlier wrap ${ref.token_id}`);
+  }
+}

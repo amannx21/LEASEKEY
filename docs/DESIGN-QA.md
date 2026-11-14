@@ -256,3 +256,26 @@ A second look at entries 19 to 24 found three places where the answer was weaker
 - Slime Arena is one game. A second, different game would show cross-game rules from both sides.
 - The factory account doubles as the launch collection "LeaseKey Originals", so the platform's admin key can still mint launch items.
 - Only NEAR NFTs can be wrapped.
+
+## 26. If wrapped items start at base power, how does a renter know which is better?
+
+**Question:** LeaseKey only works for integrated games, so their items' stats should be known beforehand and applied when the owner lists the item, not left unrated.
+
+**Answer:** agreed. "Base power until the game rates it" left renters unable to compare items.
+
+**Fix:** catalogue-based wrapping.
+
+- An integrated game publishes its catalogue once: an item type per kind of item, with name, art, power and stats.
+- When a player wraps an NFT, LeaseKey asks the NFT's own collection what the item is (`nft_token`), finds the game's catalogue entry for that title, and applies the game's name, art, power and stats. The owner sets only the price.
+- A collection that is not a registered game is refused, and so is an item the game has not catalogued. The NFT bounces back and the deposit is untouched.
+- The wrap panel shows the game's stats for the item before the owner confirms.
+
+Test: `wrap_any_nft_rent_it_then_unwrap_it`. Verified on testnet: an "Abyssal Trident" wrapped with a requested power of 99 received Ember Realms' catalogue stats instead.
+
+## 27. So minting only ever creates items a game already defined?
+
+**Answer:** yes. `mint` takes an item type and nothing else about the item. The name, art, power, stats and supply cap all come from the type the game defined in advance, and each mint creates the next numbered edition until the cap is reached. Nobody can generate a new kind of item for a game: only that game's own account can define its types, and nobody, the game included, can change a type afterwards.
+
+## 28. The "Games your game accepts" field was confusing
+
+**Fix:** the developer page's access check now has a "Game doing the check" dropdown with game names. Under it, the page states which games that game accepts. Slime Arena's list is read from its contract; any other game accepts only its own items.

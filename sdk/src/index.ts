@@ -160,8 +160,11 @@ export class LeaseKey {
 
   // ------------------------------------------------------------- wrapping
 
-  /** Two calls that wrap an NFT the player owns into a rentable LeaseKey item. Sign them in order. */
-  async wrapActions(originContract: string, originTokenId: string, listing: { name: string; pricePerHour: bigint; image?: string; power?: number; royaltyBps?: number }): Promise<[CallSpec, CallSpec]> {
+  /**
+   * Two calls that wrap an NFT the player owns into a rentable LeaseKey item. Sign them in order.
+   * The collection must be a registered game that has defined an item type whose id is the slug of the NFT's title.
+   */
+  async wrapActions(originContract: string, originTokenId: string, listing: { pricePerHour: bigint; royaltyBps?: number }): Promise<[CallSpec, CallSpec]> {
     const deposit = BigInt(await this.view<string>(this.factoryId, "mint_deposit"));
     return [
       { receiverId: this.factoryId, methodName: "deposit_for_wrap", args: {}, deposit, gas: 10n * TGAS },
@@ -171,10 +174,8 @@ export class LeaseKey {
         args: {
           receiver_id: this.factoryId,
           token_id: originTokenId,
-          msg: JSON.stringify({
-            name: listing.name, image: listing.image, power: listing.power,
-            price_per_hour: listing.pricePerHour.toString(), royalty_bps: listing.royaltyBps,
-          }),
+          // name, art, power and stats come from the game's catalogue, never from the owner
+          msg: JSON.stringify({ price_per_hour: listing.pricePerHour.toString(), royalty_bps: listing.royaltyBps }),
         },
         deposit: 1n,
         gas: 150n * TGAS,
