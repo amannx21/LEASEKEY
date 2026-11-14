@@ -218,3 +218,12 @@ The loot roll is the demo game "LeaseKey Arena" rewarding its own players, as a 
 **Fix:** the Arena panel, README and demo script now label it as the demo game's reward and state that handing out items is the game's job.
 
 **Remaining gap:** the reward logic sits in the factory contract because the demo game shares the factory's account. The clean design is a separate game contract with its own account that calls the standard `mint`. That is a refactor for after the hackathon.
+
+## 23. So how do items get onto LeaseKey, if players cannot mint?
+
+Players never mint. Items arrive in two ways:
+
+1. **A game mints to a player.** The game registers, defines capped item types with stats, and calls `mint` naming the player as owner whenever the player earns an item. A real game does this from its server through the SDK. The Game studio tab is the same call as a manual form.
+2. **A player wraps an NFT they already own** from a game's existing collection. The original is held in escrow and returned on unwrap, so no new supply is created.
+
+A player calling `mint` is rejected. Anyone can register a "game", but its items carry that game's name, are marked unverified, are hidden by default in the Armory, and are ignored by real games. A player's actions are: receive, wrap, list, rent, unlist.
