@@ -73,7 +73,8 @@ export function StatusBadge({ item }: { item: ItemView }) {
 }
 
 /** Small authored icon set, one stroke weight. */
-export function Icon({ name, size = 18 }: { name: "key" | "shield" | "clock" | "coins" | "bolt" | "arrow" | "spark" | "lock"; size?: number }) {
+export type IconName = "key" | "shield" | "clock" | "coins" | "bolt" | "arrow" | "spark" | "lock" | "home" | "sword" | "code";
+export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const p = {
     key: "M14 7a4 4 0 1 1-3.9 4.9L4 18v2h3v-2h2v-2h2l1.1-1.1A4 4 0 0 1 14 7z",
     shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z",
@@ -83,6 +84,9 @@ export function Icon({ name, size = 18 }: { name: "key" | "shield" | "clock" | "
     arrow: "M5 12h14M13 6l6 6-6 6",
     spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18",
     lock: "M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3",
+    home: "M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z",
+    sword: "M14.5 4H20v5.5L10 19.5 4.5 14zM7 16.5L4 19.5M5.5 20.5l-2-2M12.5 6l5.5 5.5",
+    code: "M8.5 7L3.5 12l5 5M15.5 7l5 5-5 5M13.5 4.5l-3 15",
   }[name];
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"

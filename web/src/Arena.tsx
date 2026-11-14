@@ -330,7 +330,7 @@ export function Arena() {
           </div>
         )}
         <p className="muted hint">
-          Space or click to attack. With leased gear every strike is a real <code>use_item</code> transaction, signed in
+          <span className="hint-fine">Space or click to attack.</span><span className="hint-touch">Tap the arena to attack.</span> With leased gear every strike is a real <code>use_item</code> transaction, signed in
           this browser by your session key. No wallet pop-ups, and the item account pays the gas.
         </p>
       </div>

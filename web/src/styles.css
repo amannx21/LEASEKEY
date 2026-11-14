@@ -217,7 +217,7 @@ body { overflow-x: clip; }
 .chip span { color: var(--muted); font-size: 13px; }
 .chip.on { background: var(--gold); color: #2a1604; border-color: var(--gold-2); }
 .chip.on span { color: #5a3a0a; }
-.tools { display: flex; gap: 14px; align-items: center; }
+.tools { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; }
 .toggle { display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; }
 .empty-inline { padding: 30px; border: 1px dashed var(--line-2); border-radius: 18px; text-align: center; color: var(--muted); }
 
@@ -374,7 +374,6 @@ canvas { display: block; width: 100%; aspect-ratio: 1280 / 560; cursor: crosshai
 }
 @media (max-width: 720px) {
   .app { padding: 0 16px 32px; }
-  nav { order: 3; width: 100%; margin: 0; overflow-x: auto; }
   .problem-grid { grid-template-columns: 1fr; }
   .bar-row { grid-template-columns: 26px 1fr 70px; }
   .bar-track, .bar-sub { display: none; }
@@ -532,3 +531,70 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
 .earn-out dd { margin: 0; font-weight: 800; }
 .earn-out small { color: var(--muted); font-weight: 600; }
 @media (max-width: 900px) { .earn-grid, .earn-out { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- navigation labels
+   Desktop shows the full label; the phone tab bar shows an icon and a short label. */
+.tab-ic, .tab-short { display: none; }
+
+/* ---------------------------------------------------------------- phone
+   One slim top row (brand and account) that scrolls away, and the sections in a
+   bottom tab bar within thumb reach, clear of the home indicator. */
+@media (max-width: 720px) {
+  .app { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .top {
+    position: static; flex-wrap: nowrap; gap: 12px; backdrop-filter: none; background: none;
+    padding: max(12px, env(safe-area-inset-top)) 0 12px;
+  }
+  .brand { flex-shrink: 0; }
+  .brand svg { width: 28px; height: 28px; }
+  .brand b { font-size: 19px; }
+  .who { gap: 8px; min-width: 0; }
+  .who-id { min-width: 0; }
+  .who-id a, .who-id .acct { display: block; max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+  .who-id small { font-size: 12px; }
+  .who button { padding: 8px 12px; font-size: 13.5px; white-space: nowrap; }
+  .who .tab-long { display: none; }
+  .who .tab-short { display: inline; }
+
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
+    padding: 6px max(8px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
+    background: color-mix(in srgb, var(--deep) 86%, transparent);
+    backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -12px 28px -16px rgba(0, 0, 0, 0.9);
+  }
+  .tab {
+    display: grid; justify-items: center; align-content: center; gap: 3px; min-height: 54px; padding: 4px 0;
+    border: none; border-radius: 14px; background: none; font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab:hover:not(:disabled) { background: none; }
+  .tab.on { background: none; border: none; color: var(--gold-2); }
+  .tab-long { display: none; }
+  .tab-short { display: block; }
+  .tab-ic {
+    display: grid; place-items: center; width: 52px; height: 30px; border-radius: 99px;
+    transition: background-color 0.25s var(--ease), color 0.25s var(--ease);
+  }
+  .tab.on .tab-ic { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold); }
+  .tab:active .tab-ic { background: color-mix(in srgb, var(--gold) 10%, transparent); }
+
+  .toasts { top: auto; left: 12px; right: 12px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .busy { bottom: calc(86px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); }
+  footer { margin-top: 36px; font-size: 12.5px; }
+}
+
+/* grid children may shrink below their content (long code lines scroll inside their own box) */
+.build-steps > *, .checker-grid > *, .earn-grid > *, .wrap-grid > *, .split > *, .arena > * { min-width: 0; }
+.toggle { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  /* the hero's lightning may bleed on desktop, but a phone must never scroll sideways */
+  .app { overflow-x: clip; }
+  pre { font-size: 12.5px; padding: 14px; }
+}
+.hint-touch { display: none; }
+@media (pointer: coarse) { .hint-fine { display: none; } .hint-touch { display: inline; } }
+@media (max-width: 720px) { .who-id a, .who-id .acct { max-width: 30vw; } .who button.small { padding: 7px 10px; } }

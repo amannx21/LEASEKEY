@@ -5,14 +5,15 @@ import { Market } from "./Market";
 import { MyItems } from "./MyItems";
 import { FACTORY_ID, fmtNear } from "./near";
 import { hasDeployment, useChain, type Page } from "./store";
-import { AccountLink } from "./ui";
+import { AccountLink, Icon, type IconName } from "./ui";
 
-const TABS: [Page, string][] = [
-  ["home", "Story"],
-  ["market", "Armory"],
-  ["arena", "Arena"],
-  ["mine", "My Items"],
-  ["build", "For game devs"],
+// [page, desktop label, phone label, icon]
+const TABS: [Page, string, string, IconName][] = [
+  ["home", "Story", "Story", "home"],
+  ["market", "Armory", "Armory", "sword"],
+  ["arena", "Arena", "Arena", "bolt"],
+  ["mine", "My Items", "Mine", "key"],
+  ["build", "For game devs", "Devs", "code"],
 ];
 
 export function App() {
@@ -29,10 +30,12 @@ export function App() {
           <b>LeaseKey</b>
         </button>
         <nav aria-label="Main">
-          {TABS.map(([p, label]) => (
+          {TABS.map(([p, label, short, icon]) => (
             <button key={p} className={c.page === p ? "tab on" : "tab"} aria-current={c.page === p ? "page" : undefined}
-              onClick={() => c.setPage(p)}>
-              {label}
+              aria-label={label} onClick={() => c.setPage(p)}>
+              <span className="tab-ic"><Icon name={icon} size={20} /></span>
+              <span className="tab-long">{label}</span>
+              <span className="tab-short" aria-hidden="true">{short}</span>
             </button>
           ))}
         </nav>
@@ -50,7 +53,9 @@ export function App() {
           ) : (
             <>
               <button className="primary" onClick={c.guestLogin} disabled={!!c.busy}>Play as guest</button>
-              <button className="ghost" onClick={c.walletLogin}>Connect wallet</button>
+              <button className="ghost" onClick={c.walletLogin} aria-label="Connect wallet">
+                <span className="tab-long">Connect wallet</span><span className="tab-short" aria-hidden="true">Wallet</span>
+              </button>
             </>
           )}
         </div>
