@@ -19,7 +19,7 @@ Owners sit on idle items. Players who cannot afford them cannot play.
 2. **Renting never moves the NFT.** The item account adds a **function-call access key** for the renter, restricted to `receiver_id = the item account` and `method_names = ["use_item"]`. The renter can play. The renter cannot transfer, sell, unlist or withdraw, because the protocol itself rejects those transactions.
 3. **Expiry is enforced in code.** NEAR keys do not expire, so `use_item` checks the block time and the signing key. After expiry anyone can call `end_rental`, which deletes the key and pays everyone.
 4. **Rent is escrowed in the item account** and split automatically between the owner and the game creator.
-5. **Only games create items, and any NFT can join.** Registered games mint items to their players and earn a royalty on every rental, so nobody can mint a free copy. Players can also **wrap** an NFT they already own in any NEAR game collection: LeaseKey holds the original in escrow, gives it a rentable account, and returns it on unwrap.
+5. **Only games create items, scarcity is enforced, and any NFT can join.** Registered games define each item type once, with its stats and a hard cap on how many can ever exist, then mint editions to their players and earn a royalty on every rental. Nobody can mint past the cap or mint a stronger copy, so scarce items stay scarce and worth renting. Players can also **wrap** an NFT they already own in any NEAR game collection: LeaseKey holds the original in escrow, gives it a rentable account, and returns it on unwrap.
 6. **Players never notice the chain.** The session key lives in the browser, signs as the item account, and the item account pays the gas. Every sword strike in the demo game is a real transaction with no wallet pop-up.
 
 ### Why this only works on NEAR
@@ -120,7 +120,7 @@ This rents an item for 60 seconds with a fresh throwaway account, strikes three 
 
 ```bash
 bash scripts/build.sh          # writes res/item.wasm and res/leasekey.wasm
-cd tests && cargo test         # 15 sandbox integration tests
+cd tests && cargo test         # 16 sandbox integration tests
 cd .. && cargo test            # unit tests for the rent, refund and split math
 ```
 
@@ -167,6 +167,11 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | Gameplay with no wallet pop-ups | demo step 4: the on-chain feed shows one transaction per strike |
 | 12 items with eight distinct attack styles | Armory page, then fight in the Arena |
 | Only registered games can mint; items record their game | test `only_registered_games_mint_and_items_record_their_game`; My Items, Game studio |
+| Hard supply caps per item type, power fixed by the type, editions like "2 of 5", types can never change | test `supply_caps_fixed_power_and_verified_games`; Armory cards |
+| Game-defined stats (attack, defence, speed, endurance…), fixed once set, used by the Arena | same test; Armory cards and item panel; Arena |
+| Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
+| The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
+| Rent guided by scarcity | My Items: "Suggest" price from supply and power |
 | Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
 | Owner and game shown on every item; "Mine" filter | Armory page |

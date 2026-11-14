@@ -115,3 +115,29 @@ Every Armory card and item panel also shows the item's game.
 **Feedback:** replace the axe throw, and remove the stray circle.
 
 **Fix:** a gauntlet snap. The Astral Gauntlet, an original design, lights its five stones and snaps. Sound-wave arcs roll out, ash and embers stream from the fingertips and bend as the wave passes, and the dust settles into "Rent in-game gear". An aftershock then shakes each letter in turn, and electric glow crackles down both sides of the text. A soft pulse repeats every 7 seconds. It is drawn on a canvas at device resolution, and reduced-motion users see the final frame.
+
+## 13. Shouldn't minting be strictly limited? What is the NFT for?
+
+**Question:** If any game can mint unlimited or overpowered items, why would anyone rent? The idea is to rent game-specific items that are hard or expensive to get, and the rent should reflect that.
+
+**Answer:** Agreed. The NFT's job is to prove that a scarce in-game item exists and who owns it. LeaseKey rents that scarcity out. Without enforced scarcity there is nothing worth renting.
+
+**Fix:**
+
+- **Capped item types, enforced on chain.** A game defines each item type once, with its art, power and the maximum number that can ever exist. Every mint must name a type, and the contract refuses to mint past the cap. Power comes from the type, so a mint cannot ask for a stronger copy. A type can never be edited, not even by the game. Test: `supply_caps_fixed_power_and_verified_games`.
+- **Editions.** Every item shows "Edition 2 of 5". The live demo items range from the one-of-a-kind Astral Gauntlet to 12 Guardian Shields.
+- **Verified partner games.** Registration stays open, but the admin marks verified partners. The Armory shows only verified games by default, and other games are labelled "Unverified".
+- **The demo Arena enforces game rules.** It honours only its own items and its partner's. Anything else is refused, with an explanation.
+- **Rent follows scarcity.** Rarity tiers come from supply: one of a kind, Mythic, Legendary, Epic, Rare. Owners get a suggested price from supply and power, and the demo items are priced with it. The one-of-a-kind gauntlet rents for 0.22 NEAR an hour, a common shield for 0.01.
+
+## 14. Items need real stats, depending on the game
+
+**Question:** Items should have separate stats like attack, defence and endurance, defined by each game.
+
+**Fix:** item types carry the game's own named stats, up to 8, such as attack, defence, speed and endurance. The game sets them once and the chain fixes them, like the supply cap. Wrapped NFTs can bring their original game's stats too. The Armory shows stat bars on every card and in the item panel. The demo Arena plays by them: attack sets damage, speed shortens the swing cooldown, defence blocks part of every hit, and endurance slowly heals.
+
+## 15. The hero animation, third pass
+
+**Feedback:** the animation repeated, the gauntlet looked unreal, and the side lightning sat at the window edges instead of being part of the scene.
+
+**Fix:** a knight raises the Thunder Hammer, it charges with sparks, he swings, and an electric beam blasts into the headline. The beam breaks into dust that settles into the grainy "Rent in-game gear". Branching thunder strikes around the knight and the words. Every bolt and flash is drawn as added light on a transparent canvas that extends past the content column, so it blends into the page with no visible edge. A final bolt jolts the letters. The sequence plays once on load, then stops, and replays only on request.
