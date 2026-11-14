@@ -48,6 +48,21 @@ const SET_OWNER_GAS: Gas = Gas::from_tgas(8);
 const UNWRAP_GAS: Gas = Gas::from_tgas(10);
 const NFT_TRANSFER_GAS: Gas = Gas::from_tgas(15);
 const RELEASE_CALLBACK_GAS: Gas = Gas::from_tgas(10);
+const VIEW_GAS: Gas = Gas::from_tgas(5);
+const DROP_CHECK_GAS: Gas = Gas::from_tgas(90);
+/// On-chain strikes a renter must land in one lease to earn a loot roll.
+pub const DROP_MIN_USES: u32 = 20;
+/// Chance of winning an item per roll, in percent, unless the admin changes it.
+pub const DROP_CHANCE_DEFAULT: u8 = 40;
+
+/// The part of an item's state the loot roll needs.
+#[near(serializers = [json])]
+pub struct LeaseState {
+    pub renter: Option<AccountId>,
+    pub uses: u32,
+    pub rental_count: u32,
+    pub rental_active: bool,
+}
 
 #[derive(BorshStorageKey)]
 #[near]
@@ -239,6 +254,12 @@ fn checked_stats(stats: Vec<Stat>) -> Vec<Stat> {
         seen.push(n);
     }
     stats.into_iter().map(|st| Stat { name: st.name.trim().to_lowercase(), value: st.value }).collect()
+}
+fn rolls_map() -> RawMap<String, bool> {
+    RawMap::new(b"dr".to_vec())
+}
+fn drop_chance() -> u8 {
+    env::storage_read(b"__drop_chance").and_then(|v| v.first().copied()).unwrap_or(DROP_CHANCE_DEFAULT)
 }
 fn is_verified(game: &AccountId) -> bool {
     verified_map().get(game).unwrap_or(false)
@@ -561,6 +582,107 @@ impl LeaseKey {
         }
         self.item_game.insert(token_id.clone(), game);
         Some(self.item_ref(token_id))
+    }
+
+    // ---------------------------------------------------------------- drops
+    // Hard-to-get items are earned by playing. A renter who lands
+    // DROP_MIN_USES on-chain strikes with a house item in one lease may roll
+    // once for a drop. A win mints the next edition of a capped house item
+    // type to the player, paid for by the game's treasury. Scarcer types are
+    // less likely, and a type whose cap is reached can never drop again.
+
+    /// Roll for a loot drop with the house item the caller is renting.
+    pub fn claim_drop(&mut self, token_id: TokenId) -> Promise {
+        let me = env::current_account_id();
+        require!(self.item_game.get(&token_id) == Some(&me), "only house game items earn drops");
+        let player = env::predecessor_account_id();
+        Promise::new(self.item_account(token_id.clone()))
+            .function_call("get_item".to_string(), b"{}".to_vec(), NearToken::from_yoctonear(0), VIEW_GAS)
+            .then(Self::ext(me).with_static_gas(DROP_CHECK_GAS).on_drop_check(player, token_id))
+    }
+
+    #[private]
+    pub fn on_drop_check(
+        &mut self,
+        player: AccountId,
+        token_id: TokenId,
+        #[callback_result] item: Result<LeaseState, PromiseError>,
+    ) -> PromiseOrValue<Option<ItemRef>> {
+        let item = item.unwrap_or_else(|_| env::panic_str("could not read the item"));
+        require!(item.rental_active && item.renter.as_ref() == Some(&player), "you are not renting this item right now");
+        require!(
+            item.uses >= DROP_MIN_USES,
+            format!("land {} strikes in this lease to earn a roll, you have {}", DROP_MIN_USES, item.uses)
+        );
+        let key = format!("{token_id}:{}", item.rental_count);
+        let mut rolls = rolls_map();
+        require!(rolls.get(&key).is_none(), "this lease already used its loot roll");
+        rolls.insert(&key, &true);
+
+        let seed = env::random_seed();
+        let won = (seed[0] as u32 * 100 / 256) < drop_chance() as u32;
+        // weighted by remaining supply: commons drop often, rare types rarely, sold-out types never
+        let me = env::current_account_id();
+        let mut types = types_map();
+        let pool: Vec<ItemType> = type_index_map()
+            .get(&me)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|id| types.get(&type_key(&me, id)))
+            .filter(|t| t.minted < t.max_supply)
+            .collect();
+        let total: u32 = pool.iter().map(|t| t.max_supply - t.minted).sum();
+        let required = self.mint_deposit().0;
+        let affordable = env::account_balance().as_yoctonear()
+            > env::storage_usage() as u128 * YOCTO_PER_BYTE + required + NFT_STORAGE * 50;
+        if !won || total == 0 || !affordable {
+            log!(
+                r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"drop_missed","data":{{"player":"{}","token_id":"{}"}}}}"#,
+                player, token_id
+            );
+            return PromiseOrValue::Value(None);
+        }
+        let mut pick = u32::from_le_bytes([seed[1], seed[2], seed[3], seed[4]]) % total;
+        let mut t = pool.into_iter().find(|t| {
+            let left = t.max_supply - t.minted;
+            if pick < left { true } else { pick -= left; false }
+        }).unwrap();
+        t.minted += 1;
+        types.insert(&type_key(&me, &t.type_id), &t);
+        log!(
+            r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"item_dropped","data":{{"player":"{}","item_type":"{}","edition":{},"max_supply":{}}}}}"#,
+            player, t.type_id, t.minted, t.max_supply
+        );
+        let item = NewItem {
+            edition: Some(Edition { item_type: t.type_id.clone(), number: t.minted }),
+            name: t.name,
+            image: t.image,
+            power: t.power,
+            price_per_hour: U128(50_000_000_000_000_000_000_000),
+            max_secs: U64(7200),
+            royalty_bps: 1000,
+            owner: player,
+            creator: me.clone(),
+            max_durability: 1000,
+            description: "Won as a loot drop in LeaseKey Arena.".to_string(),
+        };
+        PromiseOrValue::Promise(self.create_item(item, required, required, None, Some(me)))
+    }
+
+    /// Whether a lease (item + rental number) has already used its roll.
+    pub fn drop_rolled(&self, token_id: TokenId, rental_count: u32) -> bool {
+        rolls_map().get(&format!("{token_id}:{rental_count}")).is_some()
+    }
+
+    /// Admin sets the drop chance in percent.
+    pub fn set_drop_chance(&mut self, percent: u8) {
+        self.assert_admin();
+        require!(percent <= 100, "percent above 100");
+        env::storage_write(b"__drop_chance", &[percent]);
+    }
+
+    pub fn get_drop_rules(&self) -> (u32, u8) {
+        (DROP_MIN_USES, drop_chance())
     }
 
     // ----------------------------------------------------------------- wrap

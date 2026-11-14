@@ -285,3 +285,60 @@ async fn supply_caps_fixed_power_and_verified_games() -> anyhow::Result<()> {
     assert_eq!(g["verified"], true);
     Ok(())
 }
+
+/// The earning loop: play with a rented item, earn a roll, win a capped item, own it.
+#[tokio::test]
+async fn playing_earns_a_loot_roll_that_can_drop_a_capped_item() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let f = factory(&worker).await?;
+    let owner = worker.dev_create_account().await?;
+    let renter = worker.dev_create_account().await?;
+    let dep = mint_deposit(&f).await?;
+    // The factory is the house game, as on testnet.
+    f.call("register_game").args_json(json!({ "name": "LeaseKey Arena" }))
+        .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+    define(f.as_account(), f.id(), "iron-sword", 20, 2).await?;
+    let minted: Value = f.call("mint").args_json(item_args("iron-sword", Some(owner.id())))
+        .deposit(dep).max_gas().transact().await?.json()?;
+    let token_id = minted["token_id"].as_str().unwrap().to_string();
+    let item: AccountId = minted["item_account"].as_str().unwrap().parse()?;
+    owner.call(&item, "list").args_json(json!({})).transact().await?.into_result()?;
+    f.call("set_drop_chance").args_json(json!({ "percent": 100 })).transact().await?.into_result()?;
+
+    let session = rent(&worker, &renter, &item, 600).await?;
+    let roll = || renter.call(f.id(), "claim_drop").args_json(json!({ "token_id": token_id })).max_gas().transact();
+
+    // No roll without playing.
+    let r = roll().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("land 20 strikes"));
+    // Someone who is not the renter cannot roll at all.
+    for _ in 0..20 {
+        session.call(&item, "use_item").args_json(json!({ "action": "slash" })).transact().await?.into_result()?;
+    }
+    let r = owner.call(f.id(), "claim_drop").args_json(json!({ "token_id": token_id })).max_gas().transact().await?;
+    assert!(r.is_failure());
+
+    // 20 on-chain strikes earn the roll; at 100% it drops edition 2 of 2 to the player.
+    let won: Value = roll().await?.json()?;
+    assert_eq!(won["owner"], json!(renter.id()));
+    assert_eq!(won["item_type"], "iron-sword");
+    assert_eq!(won["edition"], 2);
+    assert_eq!(won["max_supply"], 2);
+    let dropped: AccountId = won["item_account"].as_str().unwrap().parse()?;
+    let v: Value = worker.view(&dropped, "get_item").await?.json()?;
+    assert_eq!(v["owner"], json!(renter.id()));
+    // The winner can rent it out like any owner.
+    renter.call(&dropped, "list").args_json(json!({})).transact().await?.into_result()?;
+
+    // One roll per lease.
+    let r = roll().await?;
+    assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("already used"));
+    let rolled: bool = f.view("drop_rolled").args_json(json!({ "token_id": token_id, "rental_count": 1 })).await?.json()?;
+    assert!(rolled);
+    // The cap is reached: this type can never drop or be minted again.
+    let r = f.call("mint").args_json(item_args("iron-sword", None)).deposit(dep).max_gas().transact().await?;
+    assert!(r.is_failure());
+    Ok(())
+}
