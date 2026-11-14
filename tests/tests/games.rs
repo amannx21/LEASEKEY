@@ -143,6 +143,18 @@ async fn wrap_any_nft_rent_it_then_unwrap_it() -> anyhow::Result<()> {
     let item: AccountId = found["item_account"].as_str().unwrap().parse()?;
     let v: Value = worker.view(&item, "get_item").await?.json()?;
     assert_eq!(v["creator"], json!(other_game.id()), "the origin collection earns the royalty");
+    // The owner asked for power 50 in the wrap message. It is ignored: owners cannot rate their own items.
+    assert_eq!(v["power"], 25);
+    assert_eq!(found["stats"].as_array().unwrap().len(), 0);
+    let rating = json!({ "token_id": found["token_id"], "stats": [{ "name": "attack", "value": 44 }, { "name": "defence", "value": 9 }] });
+    let r = player.call(f.id(), "rate_wrapped").args_json(rating.clone()).transact().await?;
+    assert!(r.is_failure(), "an owner rated their own wrapped item");
+    // The original game rates it, once.
+    other_game.as_account().call(f.id(), "rate_wrapped").args_json(rating.clone()).transact().await?.into_result()?;
+    let rated: Value = f.view("get_item_ref").args_json(json!({ "token_id": found["token_id"] })).await?.json()?;
+    assert_eq!(rated["stats"][0]["value"], 44);
+    let r = other_game.as_account().call(f.id(), "rate_wrapped").args_json(rating).transact().await?;
+    assert!(r.is_failure(), "a rating was changed");
 
     // It rents like any item.
     player.call(&item, "list").args_json(json!({})).transact().await?.into_result()?;
@@ -286,59 +298,79 @@ async fn supply_caps_fixed_power_and_verified_games() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The earning loop: play with a rented item, earn a roll, win a capped item, own it.
+/// A game on top of LeaseKey: the Slime Arena contract decides which items it
+/// honours and rewards its own players by calling the ordinary `mint`.
 #[tokio::test]
-async fn playing_earns_a_loot_roll_that_can_drop_a_capped_item() -> anyhow::Result<()> {
+async fn a_separate_game_contract_rewards_its_players_through_public_mint() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
     let f = factory(&worker).await?;
+    let studio = worker.dev_create_account().await?; // makes the items players rent
+    let stranger_studio = worker.dev_create_account().await?; // a game the arena does not accept
     let owner = worker.dev_create_account().await?;
     let renter = worker.dev_create_account().await?;
     let dep = mint_deposit(&f).await?;
-    // The factory is the house game, as on testnet.
-    f.call("register_game").args_json(json!({ "name": "LeaseKey Arena" }))
+    for (g, name) in [(&studio, "Launch Studio"), (&stranger_studio, "Other Studio")] {
+        g.call(f.id(), "register_game").args_json(json!({ "name": name }))
+            .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
+        define(g, f.id(), "iron-sword", 20, 5).await?;
+    }
+    let mint_to_owner = |g: &Account| {
+        g.call(f.id(), "mint").args_json(item_args("iron-sword", Some(owner.id()))).deposit(dep).max_gas().transact()
+    };
+    let good: Value = mint_to_owner(&studio).await?.json()?;
+    let foreign: Value = mint_to_owner(&stranger_studio).await?.json()?;
+
+    // The arena is its own contract and its own registered game with a capped reward type.
+    let arena = worker.dev_deploy(&wasm("arena-game")).await?;
+    arena.call("new").args_json(json!({ "factory": f.id(), "accepted_games": [studio.id()] })).transact().await?.into_result()?;
+    arena.as_account().call(f.id(), "register_game").args_json(json!({ "name": "Slime Arena" }))
         .deposit(NearToken::from_millinear(10)).transact().await?.into_result()?;
-    define(f.as_account(), f.id(), "iron-sword", 20, 2).await?;
-    let minted: Value = f.call("mint").args_json(item_args("iron-sword", Some(owner.id())))
-        .deposit(dep).max_gas().transact().await?.json()?;
-    let token_id = minted["token_id"].as_str().unwrap().to_string();
-    let item: AccountId = minted["item_account"].as_str().unwrap().parse()?;
-    owner.call(&item, "list").args_json(json!({})).transact().await?.into_result()?;
-    f.call("set_drop_chance").args_json(json!({ "percent": 100 })).transact().await?.into_result()?;
+    define(arena.as_account(), f.id(), "slime-crown", 30, 1).await?;
+    arena.call("set_rules").args_json(json!({ "chance_percent": 100 })).transact().await?.into_result()?;
 
-    let session = rent(&worker, &renter, &item, 600).await?;
-    let roll = || renter.call(f.id(), "claim_drop").args_json(json!({ "token_id": token_id })).max_gas().transact();
+    let roll = |token: String| renter.call(arena.id(), "claim_reward").args_json(json!({ "token_id": token })).max_gas().transact();
+    let play = |item: AccountId, session: Account| async move {
+        for _ in 0..20 {
+            session.call(&item, "use_item").args_json(json!({ "action": "slash" })).transact().await?.into_result()?;
+        }
+        anyhow::Ok(())
+    };
+    let good_item: AccountId = good["item_account"].as_str().unwrap().parse()?;
+    let good_token = good["token_id"].as_str().unwrap().to_string();
+    owner.call(&good_item, "list").args_json(json!({})).transact().await?.into_result()?;
+    let session = rent(&worker, &renter, &good_item, 600).await?;
 
-    // No roll without playing.
-    let r = roll().await?;
+    // No reward without playing.
+    let r = roll(good_token.clone()).await?;
     assert!(r.is_failure());
     assert!(format!("{r:?}").contains("land 20 strikes"));
-    // Someone who is not the renter cannot roll at all.
-    for _ in 0..20 {
-        session.call(&item, "use_item").args_json(json!({ "action": "slash" })).transact().await?.into_result()?;
-    }
-    let r = owner.call(f.id(), "claim_drop").args_json(json!({ "token_id": token_id })).max_gas().transact().await?;
+    play(good_item.clone(), session).await?;
+    // Someone who is not the renter gets nothing.
+    let r = owner.call(arena.id(), "claim_reward").args_json(json!({ "token_id": good_token })).max_gas().transact().await?;
     assert!(r.is_failure());
 
-    // 20 on-chain strikes earn the roll; at 100% it drops edition 2 of 2 to the player.
-    let won: Value = roll().await?.json()?;
+    // 20 strikes earn the roll. The arena mints through the factory's public `mint`.
+    let won: Value = roll(good_token.clone()).await?.json()?;
     assert_eq!(won["owner"], json!(renter.id()));
-    assert_eq!(won["item_type"], "iron-sword");
-    assert_eq!(won["edition"], 2);
-    assert_eq!(won["max_supply"], 2);
-    let dropped: AccountId = won["item_account"].as_str().unwrap().parse()?;
-    let v: Value = worker.view(&dropped, "get_item").await?.json()?;
-    assert_eq!(v["owner"], json!(renter.id()));
-    // The winner can rent it out like any owner.
-    renter.call(&dropped, "list").args_json(json!({})).transact().await?.into_result()?;
-
+    assert_eq!(won["game"], json!(arena.id()), "the reward is the arena's own item");
+    assert_eq!(won["game_name"], "Slime Arena");
+    assert_eq!(won["item_type"], "slime-crown");
+    assert_eq!(won["edition"], 1);
+    assert_eq!(won["max_supply"], 1);
     // One roll per lease.
-    let r = roll().await?;
+    let r = roll(good_token.clone()).await?;
     assert!(r.is_failure());
     assert!(format!("{r:?}").contains("already used"));
-    let rolled: bool = f.view("drop_rolled").args_json(json!({ "token_id": token_id, "rental_count": 1 })).await?.json()?;
-    assert!(rolled);
-    // The cap is reached: this type can never drop or be minted again.
-    let r = f.call("mint").args_json(item_args("iron-sword", None)).deposit(dep).max_gas().transact().await?;
+
+    // An item from a game the arena does not accept earns nothing, however much it is used.
+    let foreign_item: AccountId = foreign["item_account"].as_str().unwrap().parse()?;
+    let foreign_token = foreign["token_id"].as_str().unwrap().to_string();
+    owner.call(&foreign_item, "list").args_json(json!({})).transact().await?.into_result()?;
+    let renter2 = worker.dev_create_account().await?;
+    let session2 = rent(&worker, &renter2, &foreign_item, 600).await?;
+    play(foreign_item, session2).await?;
+    let r = renter2.call(arena.id(), "claim_reward").args_json(json!({ "token_id": foreign_token })).max_gas().transact().await?;
     assert!(r.is_failure());
+    assert!(format!("{r:?}").contains("does not accept items from that game"));
     Ok(())
 }
