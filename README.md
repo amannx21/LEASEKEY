@@ -35,7 +35,8 @@ Owners sit on idle items. Players who cannot afford them cannot play.
 | Factory and NEP-171 contract | [`leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/leasekey-lq3d9s.testnet) |
 | Example item account | [`flame-sword-1.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/flame-sword-1.leasekey-lq3d9s.testnet) |
 | Demo item owner | `owner.leasekey-lq3d9s.testnet` |
-| House game (mints the demo items) | "LeaseKey Arena", the factory account |
+| Launch collection (mints the demo items) | "LeaseKey Originals", the factory account |
+| Demo game, its own contract and registered game | [`arena.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/arena.leasekey-lq3d9s.testnet), "Slime Arena" |
 | Demo "other game" collection for wrapping | [`ember.leasekey-lq3d9s.testnet`](https://testnet.nearblocks.io/address/ember.leasekey-lq3d9s.testnet), "Ember Realms" |
 | Item code mode | Global contract, referenced by code hash |
 | Frontend | Run locally with `npm run dev` (see below). Hosted link: not deployed yet, see "Known limitations". |
@@ -175,7 +176,8 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | Verified partner games, shown by default in the Armory | same test; "Verified games" filter |
 | The demo Arena only honours its own and its partner's items | Arena: items from other games are refused with a reason |
 | Rent guided by scarcity | My Items: "Suggest" price from supply and power |
-| The demo game rewards its own players, as any partner game would: 20 on-chain strikes in a lease earn one roll for a capped item. LeaseKey itself never hands out items | test `playing_earns_a_loot_roll_that_can_drop_a_capped_item`; Arena "Loot roll"; `npx tsx scripts/drop-check.ts` |
+| A game is a separate contract using only LeaseKey's public interface: Slime Arena chooses which games' items it honours and rewards its players by calling the ordinary `mint`. LeaseKey itself never hands out items | test `a_separate_game_contract_rewards_its_players_through_public_mint`; Arena "Slime Arena reward"; `npx tsx scripts/drop-check.ts` |
+| Owners cannot rate their own wrapped items: only the original game sets stats, once | test `wrap_any_nft_rent_it_then_unwrap_it` |
 | Wrap any NEP-171 NFT, rent it, unwrap it; no unwrap during a lease | test `wrap_any_nft_rent_it_then_unwrap_it`; My Items, "Bring an item from another game" |
 | Factory upgraded in place without losing items | test `migrate_from_v1_keeps_items_and_credits_them_to_the_house_game` |
 | Owner and game shown on every item; "Mine" filter | Armory page |
@@ -189,6 +191,7 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 | `contracts/item` | Item contract on every item account: rental state, `use_item`, `end_rental`, early return, extend, durability, earnings and split |
 | `contracts/leasekey` | Factory and NEP-171 NFT contract: game registry, game-only minting, wrapping and unwrapping of external NFTs, transfer, enumeration, listing index |
 | `contracts/demo-nft` | A plain NEP-171 collection standing in for another game's items |
+| `contracts/arena-game` | Slime Arena, the demo game: its own contract and registered game, integrating through LeaseKey's public interface only |
 | `sdk/` | TypeScript SDK for games: rent, session keys, `canUse`, wrapping |
 | `docs/DESIGN-QA.md` | Hard design questions, with answers and the fixes they led to |
 | `tests/` | near-workspaces sandbox tests for every P0 rule |
@@ -232,10 +235,30 @@ Sandbox tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests
 - The frontend is not hosted yet. It is a static Vite build, so `npm run build:web` and any static host will serve `web/dist`.
 - Wrapping costs the same as a mint and is prepaid with `deposit_for_wrap`, because an NFT transfer carries no NEAR. Unused credit can be withdrawn.
 - Items store a generic `power` and durability. Game-specific stats stay with the game, or in the original NFT for wrapped items.
-- The loot roll belongs to the demo game "LeaseKey Arena", not to the platform. It lives in the factory contract only because the demo game shares the factory's account. A real partner game runs its own reward logic and calls `mint`.
-- Loot rolls prove paid play, not skill: the contract counts on-chain strikes, which a script could send. Drops are bounded by the supply caps and paid from the house game's treasury.
+- Slime Arena's reward rolls prove paid play, not skill: the contract counts on-chain strikes, which a script could send. Rewards are bounded by the supply caps and paid from the game contract's own balance.
 - The session key's gas allowance covers roughly eight strikes in flight at once. Faster bursts fail until earlier ones confirm.
 - Not audited. Testnet only.
+
+## How this compares
+
+NFT rental is not new, and games minting items is standard. What LeaseKey adds is how the lease is enforced.
+
+| Approach | How the renter gets access | What it leaves open |
+|---|---|---|
+| Transfer and trust (Axie-style scholarships) | The item or account is handed over | The renter can keep or misuse it |
+| Collateralized rental (for example reNFT's default mode) | The renter posts collateral worth the item | Shuts out players who cannot afford the item |
+| A "user" role on the token (ERC-4907) or a rental registry (reNFT collateral-free) | A temporary role the game reads | In the ERC-4907 reference flow the lender can reset the user and end the rental early |
+| A game's own rental market (Splinterlands) | Built into that one game | Works only inside that game |
+| **LeaseKey** | A NEAR access key on the item's own account that can only call `use_item` | See below |
+
+What is specific to LeaseKey:
+
+- **The renter's actions are real signed transactions with no wallet and no gas for the player.** The key lives on the item's account, so the item pays.
+- **The owner cannot end a lease early.** There is no revoke, unlist, unwrap or burn path while a lease runs.
+- **The item is an account.** It escrows its own rent and pays the owner and the game itself.
+- **Scarcity and game identity are part of the protocol:** capped item types, editions, and a game recorded on every item.
+
+What LeaseKey shares with the others: the game still has to integrate. Like ERC-4907 and reNFT's collateral-free mode, a lease only matters if the game checks it.
 
 ## Target tracks
 

@@ -24,5 +24,6 @@
     "secretKey": "ed25519:G7fWEPVgRPs63AGRSgkpYFNFJUdSorUYHhoWgkbwvzK9fJhsD48uGxfDZHYS91nHk1J3Du9mMJK7rNa5wrFpY7J"
   },
   "demoCollection": "ember.leasekey-lq3d9s.testnet",
-  "houseGame": "leasekey-lq3d9s.testnet"
+  "houseGame": "leasekey-lq3d9s.testnet",
+  "arenaGame": "arena.leasekey-lq3d9s.testnet"
 }

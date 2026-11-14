@@ -1,4 +1,5 @@
-// Live check of the earning loop: rent a house item, land 20 on-chain strikes, roll for a drop.
+// Live check of the game loop: rent an item, land 20 on-chain strikes, and ask the Slime Arena
+// game contract for a reward. The arena mints through the factory's public `mint`.
 //   npx tsx scripts/drop-check.ts
 import { LeaseKey, formatNear } from "../sdk/src/index.ts";
 import { TGAS, createTestAccount, readDeployment } from "./common.ts";
@@ -15,8 +16,8 @@ const session = await lk.rent(player, item.account_id, 300);
 for (let i = 0; i < 5; i++) await Promise.all(Array.from({ length: 4 }, () => session.use("slash")));
 console.log(`strikes on chain: ${(await lk.getItem(item.account_id)).uses}`);
 const out = await player.callFunction<any>({
-  contractId: d.factoryId, methodName: "claim_drop", args: { token_id: item.token_id }, gas: 200n * TGAS, waitUntil: "FINAL",
+  contractId: d.arenaGame!, methodName: "claim_reward", args: { token_id: item.token_id }, gas: 150n * TGAS, waitUntil: "FINAL",
 });
-console.log(out ? `DROP: ${out.item_type} edition ${out.edition} of ${out.max_supply} -> ${out.item_account}, owner ${out.owner}` : "no drop this roll (60% of rolls miss)");
+console.log(out ? `REWARD: ${out.item_type} edition ${out.edition} of ${out.max_supply} -> ${out.item_account}, owner ${out.owner}` : "no reward this roll (60% of rolls miss)");
 const s = await lk.returnEarly(player, item.account_id);
 console.log(`returned early, refund ${formatNear(s.renter_refund)} NEAR`);

@@ -19,8 +19,10 @@ export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const EXPLORER = "https://testnet.nearblocks.io";
 export const DEMO_COLLECTION: string = (deployment as any).demoCollection || "";
 export const HOUSE_GAME: string = (deployment as any).houseGame || FACTORY_ID;
-/** The games whose items the demo arena honours: its own, plus its partner. */
-export const ARENA_GAMES: string[] = [HOUSE_GAME, DEMO_COLLECTION].filter(Boolean);
+/** Slime Arena, the demo game: its own contract and its own registered LeaseKey game. */
+export const ARENA_GAME: string = (deployment as any).arenaGame || "";
+/** The games whose items Slime Arena honours: the launch collection, its partner, and its own rewards. */
+export const ARENA_GAMES: string[] = [HOUSE_GAME, DEMO_COLLECTION, ARENA_GAME].filter(Boolean);
 export const usableInArena = (i: { game: string | null }) => !!i.game && ARENA_GAMES.includes(i.game);
 
 /** Suggested rent per hour from how hard the item is to get: fewer copies and more power cost more. */
@@ -372,7 +374,7 @@ export class Session {
   }
 
   /** Sends any call with the session key. Only `use_item` on the item can succeed. */
-  async send<T>(methodName: string, args: Record<string, unknown>, receiverId = this.itemId, deposit = 0n) {
+  async send<T>(methodName: string, args: Record<string, unknown>, receiverId = this.itemId, deposit = 0n, attempt = 0): Promise<{ value: T; hash: string }> {
     if (!this.blockHash || Date.now() - this.blockAt > 60_000) await this.sync();
     this.nonce += 1n;
     const tx = createTransaction(
@@ -389,6 +391,10 @@ export class Session {
       return { value: parseOutcome<T>(outcome), hash: outcome.transaction.hash as string };
     } catch (e) {
       this.blockHash = null; // resync nonce and block hash before the next send
+      // Rapid strikes can reach the network out of order. Resync and try that strike again.
+      if (attempt < 2 && /nonce/i.test(String((e as any)?.type) + String((e as any)?.message))) {
+        return this.send<T>(methodName, args, receiverId, deposit, attempt + 1);
+      }
       throw e;
     }
   }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LOOKS, artUrl, lookOf, type AttackStyle, type Look } from "./catalog";
 import {
-  EXPLORER, FACTORY_ID, HOUSE_GAME, Session, TGAS, call, errorText, fmtNear, sessionKeyFor, statOf, usableInArena, view,
+  ARENA_GAME, EXPLORER, FACTORY_ID, Session, TGAS, call, errorText, fmtNear, sessionKeyFor, statOf, usableInArena, view,
   type ItemRef, type Settlement,
 } from "./near";
 import { useChain } from "./store";
@@ -75,7 +75,7 @@ export function Arena() {
       setConfirmed(item.uses);
       setDrop(null);
       setRolled(false);
-      view<boolean>(FACTORY_ID, "drop_rolled", { token_id: item.token_id, rental_count: item.rental_count })
+      view<boolean>(ARENA_GAME, "reward_rolled", { token_id: item.token_id, rental_count: item.rental_count })
         .then(setRolled, () => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -265,13 +265,13 @@ export function Arena() {
             ))}
           </div>
         )}
-        {session && item && item.game === HOUSE_GAME && (
+        {session && item && ARENA_GAME && (
           <div className={`loot ${drop?.won ? "won" : ""}`}>
             <div className="loot-head">
-              <b>LeaseKey Arena reward</b>
+              <b>Slime Arena reward</b>
               <span className="muted">
-                This demo game rewards its own players: land {DROP_MIN} strikes in one lease to roll for a rare item.
-                Handing out items is always the game's job. LeaseKey only makes them rentable.
+                Land {DROP_MIN} strikes in one lease and the game rolls a rare item for you. Slime Arena is its own
+                contract: it mints its rewards itself, like any game on LeaseKey.
               </span>
             </div>
             {drop ? (
@@ -282,7 +282,7 @@ export function Arena() {
                   <button className="link" onClick={() => c.setPage("mine")}>List it for rent in My Items</button>
                 </p>
               ) : (
-                <p className="loot-result">No drop this time. Each lease gets one roll, so rent again to try once more.</p>
+                <p className="loot-result">No reward this time. Each lease gets one roll, so rent again to try once more.</p>
               )
             ) : rolled ? (
               <p className="loot-result">This lease already used its roll.</p>
@@ -294,8 +294,8 @@ export function Arena() {
                   className="primary"
                   disabled={!!c.busy || Math.max(confirmed, item.uses) < DROP_MIN || timeLeft <= 0}
                   onClick={async () => {
-                    const out = await c.run("Rolling for a drop…", async (who) => ({
-                      won: await call<ItemRef | null>(who, FACTORY_ID, "claim_drop", { token_id: item.token_id }, 0n, 200n * TGAS),
+                    const out = await c.run("Asking Slime Arena for a reward…", async (who) => ({
+                      won: await call<ItemRef | null>(who, ARENA_GAME, "claim_reward", { token_id: item.token_id }, 0n, 150n * TGAS),
                     }));
                     if (out) {
                       setDrop({ won: out.won ?? null });
@@ -303,7 +303,7 @@ export function Arena() {
                     }
                   }}
                 >
-                  Roll for a drop
+                  Claim reward roll
                 </button>
               </div>
             )}

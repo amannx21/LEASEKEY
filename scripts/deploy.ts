@@ -103,10 +103,10 @@ async function main() {
   const owner = accountFor(ownerId);
 
   // Only registered games can mint. The factory plays the demo's house game,
-  // "LeaseKey Arena", and mints the demo items to the demo owner.
+  // launch collection "LeaseKey Originals" and mints the demo items to the demo owner.
   console.log(`==> 5/5 registering the house game and minting ${count} demo items to the owner`);
   await retry("register", () =>
-    factory.callFunction({ contractId: factoryId, methodName: "register_game", args: { name: "LeaseKey Arena" }, deposit: near("0.01") }));
+    factory.callFunction({ contractId: factoryId, methodName: "register_game", args: { name: "LeaseKey Originals" }, deposit: near("0.01") }));
   const mintDeposit = BigInt(await view<string>(factoryId, "mint_deposit"));
   const items: string[] = [];
   for (const it of DEMO_ITEMS.slice(0, count)) {

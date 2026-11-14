@@ -245,7 +245,6 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
   const [pick, setPick] = useState<Nft | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("0.08");
-  const [power, setPower] = useState(40);
 
   const load = useCallback(async () => {
     setNfts(null);
@@ -275,7 +274,6 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
         msg: JSON.stringify({
           name: name || pick.metadata?.title || `Relic #${pick.token_id}`,
           image: pick.metadata?.media ?? "",
-          power,
           price_per_hour: parseNear(price).toString(),
           royalty_bps: 500,
         }),
@@ -315,7 +313,10 @@ function WrapPanel({ onDone }: { onDone: () => void }) {
           <div className="wrap-form">
             <label>Name in LeaseKey<input value={name} maxLength={48} onChange={(e) => setName(e.target.value)} /></label>
             <label>Price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
-            <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
+            <p className="fine">
+              You set the name and the price. Power and stats are never set by the owner: the item's original game
+              rates it, and until then it plays at base power.
+            </p>
             <button className="primary big wide" disabled={!!c.busy} onClick={wrap}>Wrap and make rentable <Icon name="arrow" /></button>
             <p className="fine">Two signatures: a refundable deposit for the item's account, then the NFT transfer into escrow.</p>
           </div>

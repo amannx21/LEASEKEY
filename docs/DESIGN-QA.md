@@ -238,3 +238,21 @@ A player calling `mint` is rejected. Anyone can register a "game", but its items
 - The original game must honour the lease. It can find the wrapper of its own NFT with `findWrapped` and check access with `canUse`. Without that integration the lease is valid but the game ignores it.
 - Stats are entered by the owner at wrap time. LeaseKey does not yet read them from the original NFT's metadata, so an owner could overstate them. A game should trust its own data for wrapped items.
 - Wrapping costs about 0.16 NEAR for the item's account, refunded on failure.
+
+## 25. Gap review of the last answers, and the fixes
+
+A second look at entries 19 to 24 found three places where the answer was weaker than the claim.
+
+**1. "Handing out items is the game's job" (entries 20 and 22).** The reward roll had only been relabelled; its logic still lived in LeaseKey's factory contract. **Fixed:** Slime Arena is now its own contract with its own account (`contracts/arena-game`). It is a registered game with its own capped reward types, it keeps its own list of games it honours, and it rewards players by calling the factory's ordinary `mint`, paid from its own balance. The factory no longer contains any reward logic. Test: `a_separate_game_contract_rewards_its_players_through_public_mint`, which also shows the arena refusing an item from a game it does not accept. Verified on testnet.
+
+**2. "Items minted elsewhere can be listed" (entry 24).** The owner typed the wrapped item's power and stats, so they could overstate them. **Fixed:** the wrap message's power and stats are ignored. A wrapped item starts at base power with no stats, and only the account of the NFT's original collection can rate it, once (`rate_wrapped`). The Armory shows "Awaiting rating from its game" until then.
+
+**3. "Real games already do this" (unlogged answer).** It was given from memory and the comparison was missing from the README. **Fixed:** the claims about ERC-4907, reNFT and Splinterlands were checked against public sources, and the README has a "How this compares" section. It also states what LeaseKey shares with those approaches: the game must integrate for a lease to matter.
+
+**Also found while testing:** strikes sent in parallel could reach the network out of order and be rejected. The app and the SDK now resync and retry such a strike automatically.
+
+**Still open after this review:**
+
+- Slime Arena is one game. A second, different game would show cross-game rules from both sides.
+- The factory account doubles as the launch collection "LeaseKey Originals", so the platform's admin key can still mint launch items.
+- Only NEAR NFTs can be wrapped.

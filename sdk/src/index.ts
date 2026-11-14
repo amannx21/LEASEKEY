@@ -329,7 +329,7 @@ export class LeaseSession {
   }
 
   /** Performs one in-game action on chain. `action` is any label up to 32 bytes, e.g. "slash". */
-  async use(action: string): Promise<UseResult & { txHash: string; events: LeaseKeyEvent[] }> {
+  async use(action: string, attempt = 0): Promise<UseResult & { txHash: string; events: LeaseKeyEvent[] }> {
     if (!this.blockHash || Date.now() - this.blockAt > 60_000) await this.sync();
     this.nonce += 1n;
     const tx = createTransaction(
@@ -346,6 +346,8 @@ export class LeaseSession {
       return { ...parseOutcome<UseResult>(outcome), txHash: outcome.transaction.hash, events: eventsOf(outcome) };
     } catch (e) {
       this.blockHash = null;
+      // Parallel actions can reach the network out of order. Resync and retry.
+      if (attempt < 2 && /nonce/i.test(String((e as any)?.type) + String((e as any)?.message))) return this.use(action, attempt + 1);
       throw e;
     }
   }
