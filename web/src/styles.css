@@ -284,7 +284,17 @@ body { overflow-x: clip; }
 .stats dd { margin: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .rent-box { padding: 18px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--c1) 45%, var(--line)); background: rgba(0, 0, 0, 0.25); }
 .rent-box h3 { font-family: var(--body); font-weight: 800; font-size: 16px; }
-.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.seg button { white-space: nowrap; }
+@media (max-width: 720px) {
+  .seg { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seg button:last-child:nth-child(3n + 2) { grid-column: span 2; }
+}
+.custom-len { display: flex; gap: 8px; margin-top: 10px; }
+.custom-len input { width: 96px; }
+.custom-len select { flex: 1; }
+.rent-box .fine.bad { color: var(--ember); }
+input[aria-invalid="true"] { border-color: var(--ember); }
 .seg button { padding: 9px 4px; }
 .seg button.on { border-color: var(--gold); color: var(--gold-2); background: rgba(233, 178, 63, 0.12); }
 .bill { width: 100%; margin: 14px 0 12px; border-collapse: collapse; font-size: 14.5px; }

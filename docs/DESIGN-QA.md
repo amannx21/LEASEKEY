@@ -396,3 +396,9 @@ Why these two: the rental share grows with real usage, and the creation fee grow
 **Fix:** `DustOverlay` in `web/src/Home.tsx` samples the hero canvas's own pixels as sources and rasterises the heading exactly as the page lays it out as targets, then draws the particles on one fixed canvas from a single scroll progress (`--hp`). On phones the canvas follows the visible height while the iOS toolbar slides, only a width change rebuilds the particles, and the particle budget is lighter. With reduced motion the overlay is off and the page scrolls as before.
 
 Follow-up, "the grainy text glitches before the clear text shows": the dust letters were drawn by the canvas without the heading's letter spacing and with guessed line positions, so they sat a few pixels off the real letters and the swap jumped. Each dust letter is now placed from the page's own per-character layout, so the grains land exactly on the real glyphs. They settle earlier, swell slightly as they land so the dotted strokes close up, and cross-fade over a longer window with the heading, which sharpens from a 3px blur as it appears.
+
+## 42. "Shouldn't there be a custom rental time?"
+
+**Answer:** Yes, and the contract already allowed it: `rent` takes any `duration_secs` from 60 seconds up to the item's `max_secs`, and `list` lets the owner change `max_secs`. Only the app was limiting it, to four presets (2 min, 5 min, 30 min, 1 hour) and a fixed two-hour maximum at creation.
+
+**Fix:** the rent panel keeps the presets and adds "Custom": any number of minutes, hours or days, checked against the owner's limit, with the bill naming the exact length. On My Items, owners set "up to … h" next to the price, sent as `max_secs` with the listing. No contract change. Guest accounts on testnet are topped up for ordinary leases only (at most 5 NEAR per top-up), so a multi-day lease of an expensive item asks for your own testnet NEAR.

@@ -87,6 +87,9 @@ function OwnedRow({ item }: { item: ItemView }) {
   const status = statusOf(item);
   const [retiring, setRetiring] = useState(false);
   const [price, setPrice] = useState(fmtNear(item.price_per_hour, 4));
+  // the longest lease a renter may choose, in hours (the contract's floor is one minute)
+  const [maxHours, setMaxHours] = useState(String(Math.round((Number(item.max_secs) / 3600) * 100) / 100));
+  const maxSecs = Math.round((Number.parseFloat(maxHours) || 0) * 3600);
   const act = (label: string, method: string, args: Record<string, unknown> = {}, deposit = 0n) =>
     c.run(label, (me) => call(me, item.account_id, method, args, deposit));
 
@@ -136,8 +139,14 @@ function OwnedRow({ item }: { item: ItemView }) {
               Suggest {fmtNear(suggestedPrice(item.power, copiesOf(item)), 3)}
               {copiesOf(item) ? ` · ${copiesOf(item) === 1 ? "only one exists" : `${copiesOf(item)} exist${item.max_supply ? "" : " so far"}`}` : ""}
             </button>
-            <button disabled={!!c.busy} onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString() })}>
-              {item.listed ? "Update price" : "List for rent"}
+            <label className="inline" title="The longest lease a renter can choose. Renters pick any length up to this.">
+              <span>up to</span>
+              <input value={maxHours} onChange={(e) => setMaxHours(e.target.value)} inputMode="decimal" aria-label="Longest lease in hours" aria-invalid={maxSecs < 60} />
+              <span>h</span>
+            </label>
+            <button disabled={!!c.busy || maxSecs < 60}
+              onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString(), max_secs: String(maxSecs) })}>
+              {item.listed ? "Update listing" : "List for rent"}
             </button>
             {item.listed && (
               <button className="ghost" disabled={!!c.busy} onClick={() => act("Unlisting…", "unlist")}>Unlist</button>

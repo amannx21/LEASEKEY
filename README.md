@@ -254,6 +254,7 @@ Tests live in [`tests/tests/p0.rs`](tests/tests/p0.rs) and [`tests/tests/games.r
 |---|---|
 | Mint creates the NFT and the item's own account | test `mint_creates_item_account_and_nft`, demo step 1 |
 | List and unlist | test `rent_validates_payment_listing_and_duration`, My Items page |
+| Any lease length, up to the owner's limit | test `rent_validates_payment_listing_and_duration`; Armory "Custom" length, "up to … h" on My Items |
 | Rent adds a key restricted to `use_item` on the item account | test `rent_adds_restricted_session_key_and_use_item_works` |
 | `use_item` works only with the renter's key | test `use_item_rejects_strangers_and_wrong_keys` |
 | Renter cannot transfer, sell or withdraw | test `renter_cannot_transfer_sell_or_withdraw`, demo step 5, `npm run e2e` |

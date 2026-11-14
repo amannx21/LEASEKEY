@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { GAS_BUDGET, fmtNear, sessionKeyFor, short, usableInArena, type ItemView, copiesOf, supplyText } from "./near";
+import { GAS_BUDGET, fmtDur, fmtNear, sessionKeyFor, short, usableInArena, type ItemView, copiesOf, supplyText } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
 
@@ -185,8 +185,17 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
   const status = statusOf(item);
   const mine = c.me?.accountId === item.owner;
   const iRent = c.me?.accountId === item.renter && !!sessionKeyFor(item);
-  const options = DURATIONS.filter(([s]) => s <= Number(item.max_secs));
-  const [secs, setSecs] = useState(120);
+  const maxSecs = Number(item.max_secs);
+  const options = DURATIONS.filter(([s]) => s <= maxSecs);
+  const [preset, setPreset] = useState(options[0]?.[0] ?? 60);
+  // a custom length: any whole number of minutes, hours or days from 1 minute up to the owner's limit
+  const [custom, setCustom] = useState(options.length === 0);
+  const [amount, setAmount] = useState("10");
+  const units = (([[60, "minutes"], [3600, "hours"], [86400, "days"]] as [number, string][])).filter(([u]) => u === 60 || maxSecs >= u);
+  const [unit, setUnit] = useState(60);
+  const customSecs = Math.round((Number.parseFloat(amount) || 0) * unit);
+  const lengthOk = !custom || (customSecs >= 60 && customSecs <= maxSecs);
+  const secs = custom ? (lengthOk ? customSecs : 60) : preset;
   const cost = (BigInt(item.price_per_hour) * BigInt(secs)) / 3600n;
   // Other editions of the same capped item type, cheapest available first.
   const copies = item.item_type
@@ -258,20 +267,34 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
               <h3>Rent it</h3>
               {status === "expired" && <p className="fine">The last lease has ended. Renting closes it first, which pays its owner and game, all in one go.</p>}
               <div className="seg" role="radiogroup" aria-label="Lease length">
-                {options.map(([s, label]) => (
-                  <button key={s} role="radio" aria-checked={s === secs} className={s === secs ? "on" : ""} onClick={() => setSecs(s)}>{label}</button>
-                ))}
+                {options.map(([s, label]) => {
+                  const on = !custom && s === preset;
+                  return <button key={s} role="radio" aria-checked={on} className={on ? "on" : ""} onClick={() => { setPreset(s); setCustom(false); }}>{label}</button>;
+                })}
+                <button role="radio" aria-checked={custom} className={custom ? "on" : ""} onClick={() => setCustom(true)}>Custom</button>
               </div>
+              {custom && (
+                <div className="custom-len">
+                  <input type="number" min="1" step="1" inputMode="decimal" value={amount} aria-label="Lease length" aria-invalid={!lengthOk}
+                    onChange={(e) => setAmount(e.target.value)} />
+                  <select value={unit} aria-label="Unit" onChange={(e) => setUnit(Number(e.target.value))}>
+                    {units.map(([u, label]) => <option key={u} value={u}>{label}</option>)}
+                  </select>
+                </div>
+              )}
+              <p className={`fine${lengthOk ? "" : " bad"}`}>
+                {lengthOk ? `The owner allows leases of up to ${fmtDur(maxSecs)}.` : `Choose between 1 min and ${fmtDur(maxSecs)}.`}
+              </p>
               <table className="bill">
                 <tbody>
-                  <tr><td>Rent</td><td className="num">{fmtNear(cost, 5)} NEAR</td></tr>
+                  <tr><td>{lengthOk ? `Rent for ${fmtDur(secs)}` : "Rent"}</td><td className="num">{lengthOk ? `${fmtNear(cost, 5)} NEAR` : "–"}</td></tr>
                   <tr><td>Gas budget, unused part refunded</td><td className="num">{fmtNear(GAS_BUDGET)} NEAR</td></tr>
                   <tr><td>Collateral</td><td>none</td></tr>
-                  <tr className="total"><td>You pay now</td><td className="num">{fmtNear(cost + GAS_BUDGET, 5)} NEAR</td></tr>
+                  <tr className="total"><td>You pay now</td><td className="num">{lengthOk ? `${fmtNear(cost + GAS_BUDGET, 5)} NEAR` : "–"}</td></tr>
                 </tbody>
               </table>
               {!c.me && <p className="warn">Choose “Play as guest” at the top right to get a free testnet account first.</p>}
-              <button className="primary big wide" disabled={!c.me || !!c.busy}
+              <button className="primary big wide" disabled={!c.me || !!c.busy || !lengthOk}
                 onClick={async () => { if (await c.rent(item, secs)) onClose(); }}>
                 Rent and fight <Icon name="arrow" />
               </button>

@@ -166,6 +166,21 @@ export function fmtNear(yocto: string | bigint | null | undefined, digits = 3): 
   return `${scaled / scale}${frac ? "." + frac : ""}`;
 }
 
+/** A lease length in words: "45 min", "2 hours 30 min", "3 days". */
+export function fmtDur(secs: number): string {
+  const s = Math.max(0, Math.round(secs));
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  if (s >= 86400 && s % 3600 === 0) {
+    const d = Math.floor(s / 86400), h = (s % 86400) / 3600;
+    return plural(d, "day") + (h ? ` ${plural(h, "hour")}` : "");
+  }
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    return plural(h, "hour") + (m ? ` ${m} min` : "");
+  }
+  return `${Math.max(1, Math.round(s / 60))} min`;
+}
+
 export function parseNear(s: string): bigint {
   const [whole, frac = ""] = s.trim().split(".");
   return BigInt(whole || "0") * NEAR + BigInt((frac + "0".repeat(24)).slice(0, 24));
@@ -402,12 +417,15 @@ const STORAGE_ROOM = NEAR / 100n; // 0.01 NEAR
  * Guests were funded by the guest bank (0.5 NEAR), so the same bank refills them when a lease would not fit.
  * Wallet users get a plain message instead of a raw chain error.
  */
+const GUEST_TOPUP_MAX = 5n * NEAR;
+
 export async function ensureFunds(who: Identity, deposit: bigint, gas: bigint): Promise<void> {
   const need = deposit + gas * PREPAID_PER_GAS + STORAGE_ROOM;
   const have = await getBalance(who.accountId).catch(() => null);
   if (have === null || have >= need) return;
   const bank = (deployment as any).guestBank as { accountId: string; secretKey: string } | undefined;
-  if (who.kind === "guest" && bank) {
+  // the shared guest bank covers ordinary leases, not a multi-day lease of an expensive item
+  if (who.kind === "guest" && bank && need - have <= GUEST_TOPUP_MAX) {
     const banker = new Account(bank.accountId, provider, KeyPairSigner.fromSecretKey(bank.secretKey as any));
     await banker.transfer({ receiverId: who.accountId, amount: need - have + NEAR / 2n });
     return;
