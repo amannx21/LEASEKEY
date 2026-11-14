@@ -236,7 +236,7 @@ export function Arena() {
               <button
                 className={usesLeft === 0 ? "primary" : ""}
                 disabled={!!c.busy}
-                title="End the lease now. Unused time and gas are refunded to you, the owner and the game are paid for the time used."
+                title="End the lease now. You get back the rent for the unused time (minus a 5% early-return fee) and all unused gas. The owner and the game are paid for the time used."
                 onClick={async () => {
                   const s = await c.run("Returning early…", (me) => call<Settlement>(me, item.account_id, "return_early"));
                   if (s) c.toast("ok", `Returned. Refund ${fmtNear(s.renter_refund, 4)} NEAR for unused time and gas.`);
