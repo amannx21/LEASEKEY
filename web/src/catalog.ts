@@ -83,8 +83,15 @@ export function artUrl(image: string): string {
   return `/items/${LOOKS[key] ? key : "generic"}.svg`;
 }
 
-/** Rarity from power, so the marketplace can sort and colour by it. */
-export function rarityOf(power: number): { name: string; color: string } {
+/** Rarity from scarcity: how many of the item can ever exist. Falls back to power. */
+export function rarityOf(power: number, maxSupply?: number | null): { name: string; color: string } {
+  if (maxSupply) {
+    if (maxSupply === 1) return { name: "One of a kind", color: "#ff9f3d" };
+    if (maxSupply <= 3) return { name: "Mythic", color: "#ff9f3d" };
+    if (maxSupply <= 6) return { name: "Legendary", color: "#ffd23d" };
+    if (maxSupply <= 10) return { name: "Epic", color: "#c58bff" };
+    return { name: "Rare", color: "#5cc8ff" };
+  }
   if (power >= 60) return { name: "Mythic", color: "#ff9f3d" };
   if (power >= 40) return { name: "Legendary", color: "#ffd23d" };
   if (power >= 25) return { name: "Epic", color: "#c58bff" };

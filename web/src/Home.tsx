@@ -117,6 +117,7 @@ function Guarantees() {
   const [ref, shown] = useReveal<HTMLElement>();
   const yes = ["Use the item in its game", "Play without a wallet pop-up on every action", "Return early and get unused time back"];
   const no = ["Transfer or sell the item", "Withdraw the item's earnings", "Call any other contract", "Keep playing after the lease ends"];
+  const game = ["Mint past an item's supply cap", "Mint a stronger copy than the type allows", "Change an item type once it exists"];
   const owner = ["Cancel or unlist mid-lease", "Revoke the renter's key", "Unwrap the original NFT mid-lease", "Burn the item"];
   return (
     <section ref={ref} className={`guarantees ${shown ? "in" : ""}`}>
@@ -133,6 +134,10 @@ function Guarantees() {
         <div className="guar no">
           <h3><Icon name="shield" /> The owner can never</h3>
           <ul>{owner.map((t) => <li key={t}>{t}</li>)}</ul>
+        </div>
+        <div className="guar no">
+          <h3><Icon name="spark" /> Even the game can never</h3>
+          <ul>{game.map((t) => <li key={t}>{t}</li>)}</ul>
         </div>
       </div>
     </section>
@@ -155,8 +160,9 @@ function GameBound({ items, games }: { items: ItemView[]; games: GameInfo[] }) {
     <section ref={ref} className={`gamebound ${shown ? "in" : ""}`}>
       <h2>Every item knows which game it belongs to</h2>
       <p className="section-lede">
-        Only registered games can create items, and the game is written into the item when it is made. It can never be
-        changed, so nobody can mint a free copy of your sword and pass it off as the real thing.
+        Only registered games can create items. Each game defines an item type once, with its power and a hard cap on
+        how many can ever exist, and the chain enforces it. The game is written into every item and can never change,
+        so nobody can mint a stronger or extra copy and pass it off as the real thing.
       </p>
 
       <div className="gb-grid">
@@ -419,7 +425,7 @@ function Featured({ items, onOpen, onAll }: { items: ItemView[]; onOpen: (id: st
       <div className="feat-strip">
         {top.map((i) => {
           const look = lookOf(i.image);
-          const r = rarityOf(i.power);
+          const r = rarityOf(i.power, i.max_supply);
           return (
             <button key={i.account_id} className="feat" style={{ ["--c1" as string]: look.colors[0], ["--c2" as string]: look.colors[1] }}
               onClick={() => onOpen(i.account_id)}>

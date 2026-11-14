@@ -69,6 +69,10 @@ export type ItemRef = {
   game: string | null;
   game_name: string | null;
   origin: { contract: string; token_id: string } | null;
+  verified: boolean;
+  item_type: string | null;
+  edition: number | null;
+  max_supply: number | null;
 };
 
 /** A plain function-call description any wallet (Wallet Selector, HOT, Meteor…) can sign. */
@@ -234,9 +238,27 @@ export class LeaseKey {
    * A registered game mints an item to a player (`owner`, default the game itself).
    * The game is the creator and earns the royalty. Listing is done by the owner.
    */
+  /** A registered game defines a capped item type once. It can never be edited. */
+  defineItemTypeAction(t: { typeId: string; name: string; image: string; power: number; maxSupply: number }): CallSpec {
+    return {
+      receiverId: this.factoryId,
+      methodName: "define_item_type",
+      args: { type_id: t.typeId, name: t.name, image: t.image, power: t.power, max_supply: t.maxSupply },
+      deposit: 10n ** 22n,
+      gas: 30n * TGAS,
+    };
+  }
+
+  /** A game's item types with their supply caps and how many exist. */
+  itemTypes(game: string) {
+    return this.view<{ type_id: string; name: string; image: string; power: number; max_supply: number; minted: number }[]>(
+      this.factoryId, "get_item_types", { game },
+    );
+  }
+
   async mintAndList(
     game: Account,
-    item: { name: string; image: string; power: number; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; owner?: string },
+    item: { itemType: string; pricePerHour: bigint; maxSecs?: number; royaltyBps?: number; owner?: string },
   ): Promise<{ token_id: string; item_account: string }> {
     const deposit = BigInt(await this.view<string>(this.factoryId, "mint_deposit"));
     const minted = parseOutcome<{ token_id: string; item_account: string } | null>(
@@ -244,7 +266,7 @@ export class LeaseKey {
         contractId: this.factoryId,
         methodName: "mint",
         args: { args: {
-          name: item.name, image: item.image, power: item.power, price_per_hour: item.pricePerHour.toString(),
+          item_type: item.itemType, price_per_hour: item.pricePerHour.toString(),
           max_secs: String(item.maxSecs ?? 7200), royalty_bps: item.royaltyBps ?? 1000, owner: item.owner ?? null,
         } },
         deposit,

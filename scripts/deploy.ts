@@ -19,6 +19,13 @@ const MODE = (process.env.MODE ?? "global") as "global" | "embedded";
 const ITEM_COUNT = Number(process.env.ITEMS ?? 12);
 const GAS = 300n * TGAS;
 
+// How many of each can ever exist. Fewer = harder to get = worth more to rent.
+const SUPPLY: Record<string, number> = {
+  "Astral Gauntlet": 1, "Thunder Hammer": 3, "Tide Trident": 3, "Photon Saber": 4,
+  "Flame Sword": 5, "Storm Staff": 5, "Aegis Plate": 6, "Frost Bow": 8,
+  "Plasma Blaster": 8, "Shadow Dagger": 10, "Seraph Helm": 10, "Guardian Shield": 12,
+};
+
 const DEMO_ITEMS = [
   { name: "Flame Sword", image: "flame-sword.svg", power: 40, price: "0.1", royalty_bps: 1000 },
   { name: "Frost Bow", image: "frost-bow.svg", power: 28, price: "0.06", royalty_bps: 1000 },
@@ -103,11 +110,18 @@ async function main() {
   const mintDeposit = BigInt(await view<string>(factoryId, "mint_deposit"));
   const items: string[] = [];
   for (const it of DEMO_ITEMS.slice(0, count)) {
+    // Each item belongs to a capped type: only SUPPLY[name] can ever exist.
+    const typeId = it.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    await retry("define", () => factory.callFunction({
+      contractId: factoryId, methodName: "define_item_type",
+      args: { type_id: typeId, name: it.name, image: it.image, power: it.power, max_supply: SUPPLY[it.name] ?? 5 },
+      deposit: near("0.01"),
+    }));
     const minted = await factory.callFunction<{ token_id: string; item_account: string } | null>({
       contractId: factoryId,
       methodName: "mint",
       args: { args: {
-        name: it.name, image: it.image, power: it.power,
+        item_type: typeId,
         price_per_hour: near(it.price).toString(), max_secs: "7200",
         royalty_bps: it.royalty_bps, owner: ownerId,
       } },
@@ -123,6 +137,7 @@ async function main() {
   }
 
   // A stand-in for another game's NFT collection, for the wrap demo.
+  // Both partner games are verified so the Armory shows them by default.
   const emberId = `ember.${factoryId}`;
   const emberKey = KeyPair.fromRandom("ed25519");
   await retry("ember", () => factory.createSubAccount("ember", emberKey.getPublicKey(), near("2.2")));
@@ -130,6 +145,10 @@ async function main() {
   await retry("ember deploy", () => accountFor(emberId).deployContract(readFileSync(join(ROOT, "res", "demo-nft.wasm"))));
   await accountFor(emberId).callFunction({ contractId: emberId, methodName: "new", args: { name: "Ember Realms" } });
   console.log(`   demo collection "Ember Realms" -> ${emberId}`);
+  await accountFor(emberId).callFunction({ contractId: factoryId, methodName: "register_game", args: { name: "Ember Realms" }, deposit: near("0.01") });
+  for (const game of [factoryId, emberId]) {
+    await factory.callFunction({ contractId: factoryId, methodName: "set_verified", args: { game, verified: true } });
+  }
 
   const deployment: Deployment = {
     network: "testnet", factoryId, ownerId, mode: MODE, itemCodeHash, items,

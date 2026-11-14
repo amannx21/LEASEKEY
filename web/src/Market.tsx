@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
-import { GAS_BUDGET, fmtNear, sessionKeyFor, short, type ItemView } from "./near";
+import { GAS_BUDGET, fmtNear, sessionKeyFor, short, usableInArena, type ItemView } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Countdown, Durability, Icon, StatusBadge, statusOf } from "./ui";
 
@@ -19,10 +19,15 @@ export function Market() {
   const [sort, setSort] = useState<Sort>("power");
   const [onlyFree, setOnlyFree] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [onlyVerified, setOnlyVerified] = useState(true);
   const me = c.me?.accountId;
   const [q, setQ] = useState("");
 
-  const visible = useMemo(() => c.items.filter((i) => i.listed || i.renter || i.owner === me), [c.items, me]);
+  // unlisted items show only to their owner; unverified games only on request
+  const visible = useMemo(
+    () => c.items.filter((i) => (i.listed || i.renter || i.owner === me) && (!onlyVerified || i.verified || i.owner === me)),
+    [c.items, me, onlyVerified],
+  );
   const counts = useMemo(() => {
     const m = new Map<string, number>([["All", visible.length]]);
     for (const i of visible) m.set(lookOf(i.image).cls, (m.get(lookOf(i.image).cls) ?? 0) + 1);
@@ -84,6 +89,10 @@ export function Market() {
               <span>Mine</span>
             </label>
           )}
+          <label className="toggle" title="Only show items from games LeaseKey has verified">
+            <input type="checkbox" checked={onlyVerified} onChange={(e) => setOnlyVerified(e.target.checked)} />
+            <span>Verified games</span>
+          </label>
           <label className="toggle">
             <input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} />
             <span>Available now</span>
@@ -121,7 +130,7 @@ function gameLabel(item: ItemView) {
 
 function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: () => void }) {
   const look = lookOf(item.image);
-  const r = rarityOf(item.power);
+  const r = rarityOf(item.power, item.max_supply);
   const status = statusOf(item);
   return (
     <button
@@ -137,9 +146,16 @@ function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: (
         <span className="cls">{look.cls === "Armor" ? "Armour" : look.cls}</span>
       </span>
       <b className="item-name">{item.name}</b>
+      {item.edition && item.max_supply ? (
+        <span className="edition num">Edition {item.edition} of {item.max_supply}{item.max_supply === 1 ? ", the only one" : ""}</span>
+      ) : item.origin ? (
+        <span className="edition">Original NFT held in escrow</span>
+      ) : null}
       <span className="item-tag">{look.tagline}</span>
       <span className="item-meta">
-        <span>{gameLabel(item)}</span>
+        <span className={item.verified ? "verified" : "unverified"} title={item.verified ? "Verified LeaseKey partner game" : "This game is not verified by LeaseKey"}>
+          {item.verified ? "✓ " : "Unverified · "}{gameLabel(item)}
+        </span>
         <span className={item.owner === me ? "yours" : ""}>{item.owner === me ? "Yours" : `Owner ${short(item.owner)}`}</span>
       </span>
       <span className="item-power" aria-label={`Power ${item.power}`}>
@@ -161,7 +177,7 @@ function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: (
 function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
   const c = useChain();
   const look = lookOf(item.image);
-  const r = rarityOf(item.power);
+  const r = rarityOf(item.power, item.max_supply);
   const status = statusOf(item);
   const mine = c.me?.accountId === item.owner;
   const iRent = c.me?.accountId === item.renter && !!sessionKeyFor(item);
@@ -198,7 +214,9 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
             <div><dt>Leases so far</dt><dd className="num">{item.rental_count}</dd></div>
             <div><dt>Owner</dt><dd><AccountLink id={item.owner} />{mine && " (you)"}</dd></div>
             <div><dt>Its own account</dt><dd><AccountLink id={item.account_id} /></dd></div>
-            <div><dt>Game</dt><dd>{item.origin ? <>Wrapped from <AccountLink id={item.origin.contract} /></> : item.game_name ?? "Unregistered"}</dd></div>
+            <div><dt>Supply</dt><dd className="num">{item.max_supply ? `Edition ${item.edition} of ${item.max_supply} ever made` : item.origin ? "Set by its original collection" : "Unique"}</dd></div>
+            <div><dt>Works in LeaseKey Arena</dt><dd>{usableInArena(item) ? "Yes" : "No, it belongs to another game"}</dd></div>
+            <div><dt>Game</dt><dd>{item.verified ? "✓ " : "Unverified · "}{item.origin ? <>Wrapped from <AccountLink id={item.origin.contract} /></> : item.game_name ?? "Unregistered"}</dd></div>
             {item.origin && <div><dt>Original NFT</dt><dd className="num">#{item.origin.token_id}, held in escrow</dd></div>}
           </dl>
 

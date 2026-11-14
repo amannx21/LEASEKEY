@@ -102,6 +102,14 @@ pub struct ItemType {
     pub minted: u32,
 }
 
+/// One game-defined stat, e.g. attack 40. Each game names its own stats.
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Stat {
+    pub name: String,
+    pub value: u32,
+}
+
 /// Which type an item belongs to and its serial number, e.g. 2 of 5.
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
@@ -137,6 +145,8 @@ pub struct WrapArgs {
     pub max_secs: Option<U64>,
     /// Royalty paid to the origin collection on every rental. Default 0.
     pub royalty_bps: Option<u16>,
+    /// The original game's stats for this item, shown and used by games.
+    pub stats: Option<Vec<Stat>>,
 }
 
 #[near(serializers = [json])]
@@ -153,6 +163,8 @@ pub struct ItemRef {
     pub item_type: Option<String>,
     pub edition: Option<u32>,
     pub max_supply: Option<u32>,
+    /// The game's stats for this item, from its type (or its wrap).
+    pub stats: Vec<Stat>,
 }
 
 #[near(serializers = [json])]
@@ -208,6 +220,25 @@ fn editions_map() -> RawMap<TokenId, Edition> {
 }
 fn verified_map() -> RawMap<AccountId, bool> {
     RawMap::new(b"vf".to_vec())
+}
+fn stats_map() -> RawMap<String, Vec<Stat>> {
+    RawMap::new(b"st".to_vec())
+}
+fn wrap_stats_map() -> RawMap<TokenId, Vec<Stat>> {
+    RawMap::new(b"ws".to_vec())
+}
+/// At most 8 stats, short names, values up to 10000, no duplicates.
+fn checked_stats(stats: Vec<Stat>) -> Vec<Stat> {
+    require!(stats.len() <= 8, "at most 8 stats");
+    let mut seen = Vec::new();
+    for st in &stats {
+        let n = st.name.trim().to_lowercase();
+        require!(!n.is_empty() && n.len() <= 16, "stat names must be 1..=16 chars");
+        require!(st.value <= 10_000, "stat value above 10000");
+        require!(!seen.contains(&n), "duplicate stat");
+        seen.push(n);
+    }
+    stats.into_iter().map(|st| Stat { name: st.name.trim().to_lowercase(), value: st.value }).collect()
 }
 fn is_verified(game: &AccountId) -> bool {
     verified_map().get(game).unwrap_or(false)
@@ -380,7 +411,7 @@ impl LeaseKey {
     /// A game defines a kind of item once: its name, art, power and how many
     /// can ever exist. It cannot be changed afterwards.
     #[payable]
-    pub fn define_item_type(&mut self, type_id: String, name: String, image: String, power: u32, max_supply: u32) -> ItemType {
+    pub fn define_item_type(&mut self, type_id: String, name: String, image: String, power: u32, max_supply: u32, stats: Option<Vec<Stat>>) -> ItemType {
         let game = env::predecessor_account_id();
         require!(self.games.contains_key(&game), "only registered games can define items");
         require!(env::attached_deposit().as_yoctonear() >= GAME_DEPOSIT, "attach 0.01 NEAR for storage");
@@ -394,11 +425,29 @@ impl LeaseKey {
         require!(types.get(&key).is_none(), "item type already defined; types cannot be changed");
         let t = ItemType { game: game.clone(), type_id: type_id.clone(), name, image, power, max_supply, minted: 0 };
         types.insert(&key, &t);
+        if let Some(st) = stats {
+            stats_map().insert(&key, &checked_stats(st));
+        }
         let mut index = type_index_map();
         let mut list = index.get(&game).unwrap_or_default();
         list.push(type_id);
         index.insert(&game, &list);
         t
+    }
+
+    /// Sets the stats of a type defined before stats existed. Only once: after
+    /// that they are as fixed as the type itself.
+    pub fn set_type_stats(&mut self, type_id: String, stats: Vec<Stat>) {
+        let game = env::predecessor_account_id();
+        let key = type_key(&game, &slug(&type_id));
+        require!(types_map().get(&key).is_some(), "no such item type for this game");
+        let mut m = stats_map();
+        require!(m.get(&key).is_none(), "stats are already set and cannot change");
+        m.insert(&key, &checked_stats(stats));
+    }
+
+    pub fn get_type_stats(&self, game: AccountId, type_id: String) -> Vec<Stat> {
+        stats_map().get(&type_key(&game, &type_id)).unwrap_or_default()
     }
 
     pub fn get_item_types(&self, game: AccountId) -> Vec<ItemType> {
@@ -547,6 +596,7 @@ impl LeaseKey {
         origin: Origin,
         metadata: TokenMetadata,
         deposit: U128,
+        stats: Vec<Stat>,
         #[callback_result] result: Result<(), PromiseError>,
     ) -> bool {
         if result.is_err() {
@@ -560,6 +610,9 @@ impl LeaseKey {
             r#"EVENT_JSON:{{"standard":"leasekey","version":"1.0.0","event":"item_wrapped","data":{{"token_id":"{}","owner":"{}","origin_contract":"{}","origin_token_id":"{}"}}}}"#,
             token_id, owner, origin.contract, origin.token_id
         );
+        if !stats.is_empty() {
+            wrap_stats_map().insert(&token_id, &stats);
+        }
         self.origins.insert(token_id, origin);
         false // keep it in escrow
     }
@@ -672,7 +725,12 @@ impl LeaseKey {
             (Some(g), Some(e)) => types_map().get(&type_key(g, &e.item_type)).map(|t| t.max_supply),
             _ => None,
         };
+        let stats = match (&game, &edition) {
+            (Some(g), Some(e)) => stats_map().get(&type_key(g, &e.item_type)).unwrap_or_default(),
+            _ => wrap_stats_map().get(&token_id).unwrap_or_default(),
+        };
         ItemRef {
+            stats,
             verified: game.as_ref().is_some_and(is_verified),
             item_type: edition.as_ref().map(|e| e.item_type.clone()),
             edition: edition.map(|e| e.number),
@@ -700,7 +758,7 @@ impl LeaseKey {
 
     /// Creates `<token-id>.<this contract>`, attaches item code, initialises it,
     /// then calls back to mint the NFT (or to finish a wrap).
-    fn create_item(&mut self, it: NewItem, deposit: u128, refund: u128, origin: Option<Origin>, payer: Option<AccountId>) -> Promise {
+    fn create_item(&mut self, it: NewItem, deposit: u128, refund: u128, origin: Option<(Origin, Vec<Stat>)>, payer: Option<AccountId>) -> Promise {
         require!(!it.name.is_empty() && it.name.len() <= 48, "name must be 1..=48 chars");
         let token_id = format!("{}-{}", slug(&it.name), self.next_id);
         self.next_id += 1;
@@ -747,7 +805,7 @@ impl LeaseKey {
         let created = with_code.function_call("new".to_string(), init, NearToken::from_yoctonear(0), INIT_GAS);
         let me = Self::ext(env::current_account_id()).with_static_gas(MINT_CALLBACK_GAS);
         match origin {
-            Some(origin) => created.then(me.on_wrap_created(token_id, it.owner, origin, metadata, U128(refund))),
+            Some((origin, stats)) => created.then(me.on_wrap_created(token_id, it.owner, origin, metadata, U128(refund), stats)),
             None => created.then(me.on_item_created(
                 token_id,
                 it.owner,
@@ -816,7 +874,8 @@ impl NonFungibleTokenReceiver for LeaseKey {
             description: format!("Wrapped from {origin_contract} #{token_id}. Rentable on LeaseKey."),
         };
         let origin = Origin { contract: origin_contract, token_id };
-        PromiseOrValue::Promise(self.create_item(item, required, required, Some(origin), None))
+        let stats = args.stats.map(checked_stats).unwrap_or_default();
+        PromiseOrValue::Promise(self.create_item(item, required, required, Some((origin, stats)), None))
     }
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ART_KEYS, artUrl, lookOf } from "./catalog";
 import {
-  DEMO_COLLECTION, FACTORY_ID, TGAS, call, fmtNear, parseNear, sessionKeyFor, view,
+  DEMO_COLLECTION, FACTORY_ID, TGAS, call, fmtNear, parseNear, sessionKeyFor, suggestedPrice, view,
   type ItemView, type Settlement,
 } from "./near";
 import { useChain } from "./store";
@@ -127,6 +127,14 @@ function OwnedRow({ item }: { item: ItemView }) {
               <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" aria-label="Price per hour" />
               <span>NEAR/hr</span>
             </label>
+            <button
+              className="link"
+              title="Based on how many of this item can ever exist and its power"
+              onClick={() => setPrice(fmtNear(suggestedPrice(item.power, item.max_supply), 4))}
+            >
+              Suggest {fmtNear(suggestedPrice(item.power, item.max_supply), 3)}
+              {item.max_supply ? ` · ${item.max_supply === 1 ? "only one exists" : `${item.max_supply} exist`}` : ""}
+            </button>
             <button disabled={!!c.busy} onClick={() => act("Listing…", "list", { price_per_hour: parseNear(price).toString() })}>
               {item.listed ? "Update price" : "List for rent"}
             </button>
@@ -341,12 +349,6 @@ function StudioPanel() {
   const me = c.me!.accountId;
   const [game, setGame] = useState<{ name: string } | null | undefined>(undefined);
   const [gameName, setGameName] = useState("");
-  const [name, setName] = useState("Ember Blade");
-  const [art, setArt] = useState("flame-sword");
-  const [power, setPower] = useState(35);
-  const [price, setPrice] = useState("0.1");
-  const [royalty, setRoyalty] = useState(10);
-  const [player, setPlayer] = useState("");
 
   const load = useCallback(() => view<{ name: string } | null>(FACTORY_ID, "get_game", { account_id: me }).then(setGame, () => setGame(null)), [me]);
   useEffect(() => { load(); }, [load]);
@@ -370,39 +372,96 @@ function StudioPanel() {
     );
   }
 
+  return <Studio gameName={game.name} me={me} />;
+}
+
+type ItemType = { type_id: string; name: string; image: string; power: number; max_supply: number; minted: number };
+
+function Studio({ gameName, me }: { gameName: string; me: string }) {
+  const c = useChain();
+  const [types, setTypes] = useState<ItemType[]>([]);
+  const [name, setName] = useState("Ember Blade");
+  const [art, setArt] = useState("flame-sword");
+  const [power, setPower] = useState(35);
+  const [supply, setSupply] = useState(5);
+  const [pick, setPick] = useState("");
+  const [player, setPlayer] = useState("");
+  const [royalty, setRoyalty] = useState(10);
+
+  const load = useCallback(
+    () => view<ItemType[]>(FACTORY_ID, "get_item_types", { game: me }).then((t) => { setTypes(t); setPick((p) => p || t[0]?.type_id || ""); }, () => setTypes([])),
+    [me],
+  );
+  useEffect(() => { load(); }, [load]);
+
+  const define = async () => {
+    await c.run(`Defining ${name}…`, (who) =>
+      call(who, FACTORY_ID, "define_item_type", { type_id: name, name, image: `${art}.svg`, power, max_supply: supply }, 10n ** 22n));
+    await load();
+  };
+
+  const chosen = types.find((t) => t.type_id === pick);
   const mint = () =>
-    c.run(`Minting ${name}…`, async (who) => {
+    c.run(`Minting ${chosen?.name}…`, async (who) => {
       const deposit = BigInt(await view<string>(FACTORY_ID, "mint_deposit"));
       const owner = player.trim() || me;
-      const minted = await call<{ token_id: string; item_account: string } | null>(who, FACTORY_ID, "mint", {
+      const minted = await call<{ token_id: string; item_account: string; edition: number } | null>(who, FACTORY_ID, "mint", {
         args: {
-          name, image: `${art}.svg`, power, price_per_hour: parseNear(price).toString(), max_secs: "7200",
+          item_type: pick, price_per_hour: suggestedPrice(chosen!.power, chosen!.max_supply).toString(), max_secs: "7200",
           royalty_bps: Math.round(royalty * 100), owner,
         },
       }, deposit, 150n * TGAS);
       if (!minted) throw new Error("mint failed, deposit refunded");
       if (owner === me) await call(who, minted.item_account, "list", {});
-      c.toast("ok", `${name} minted to ${owner}. It lives at ${minted.item_account}.`);
+      c.toast("ok", `${chosen!.name} edition ${minted.edition} of ${chosen!.max_supply} minted to ${owner}.`);
+      await load();
     });
 
   return (
-    <section className="panel studio">
-      <h3>{game.name} studio</h3>
-      <p className="muted">Mint items to your players. Each item gets its own account and records {game.name} as its game.</p>
-      <label>Item name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
-      <label>Look</label>
-      <div className="art-pick">
-        {ART_KEYS.map((a) => (
-          <button key={a} className={a === art ? "on" : ""} onClick={() => setArt(a)} title={lookOf(`${a}.svg`).tagline}>
-            <img src={`/items/${a}.svg`} alt={a} />
-          </button>
-        ))}
-      </div>
-      <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
-      <label>Suggested price per hour (NEAR)<input value={price} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} /></label>
-      <label>Your royalty on every rental: {royalty}%<input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} /></label>
-      <label>Give it to player (account ID, blank for yourself)<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
-      <button className="primary" disabled={!!c.busy || !name.trim()} onClick={mint}>Mint item</button>
-    </section>
+    <div className="wrap-grid">
+      <section className="panel studio">
+        <h3>1. Define an item type</h3>
+        <p className="muted">
+          Decide once what this item is and how many can ever exist. The chain enforces the cap and the power, and the
+          type can never be edited, not even by you. Scarcer items rent for more.
+        </p>
+        <label>Item name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
+        <label>Look</label>
+        <div className="art-pick">
+          {ART_KEYS.map((a) => (
+            <button key={a} className={a === art ? "on" : ""} onClick={() => setArt(a)} title={lookOf(`${a}.svg`).tagline}>
+              <img src={`/items/${a}.svg`} alt={a} />
+            </button>
+          ))}
+        </div>
+        <label>Power: {power}<input type="range" min={5} max={80} value={power} onChange={(e) => setPower(Number(e.target.value))} /></label>
+        <label>Only {supply} will ever exist<input type="range" min={1} max={50} value={supply} onChange={(e) => setSupply(Number(e.target.value))} /></label>
+        <p className="fine">Suggested rent: {fmtNear(suggestedPrice(power, supply), 3)} NEAR per hour.</p>
+        <button className="primary" disabled={!!c.busy || !name.trim()} onClick={define}>Define for 0.01 NEAR</button>
+      </section>
+
+      <section className="panel studio">
+        <h3>2. Mint to a player</h3>
+        <p className="muted">{gameName} item types and how many of each exist so far.</p>
+        {types.length === 0 && <p className="muted">No item types yet. Define one first.</p>}
+        <div className="type-list">
+          {types.map((t) => (
+            <button key={t.type_id} className={pick === t.type_id ? "on" : ""} onClick={() => setPick(t.type_id)} disabled={t.minted >= t.max_supply}>
+              <img src={artUrl(t.image)} alt="" />
+              <span><b>{t.name}</b><small className="num">{t.minted} of {t.max_supply} minted · power {t.power}</small></span>
+            </button>
+          ))}
+        </div>
+        {chosen && (
+          <>
+            <label>Give it to player (account ID, blank for yourself)<input value={player} onChange={(e) => setPlayer(e.target.value)} placeholder="player.testnet" /></label>
+            <label>Your royalty on every rental: {royalty}%<input type="range" min={0} max={30} value={royalty} onChange={(e) => setRoyalty(Number(e.target.value))} /></label>
+            <button className="primary" disabled={!!c.busy || chosen.minted >= chosen.max_supply} onClick={mint}>
+              {chosen.minted >= chosen.max_supply ? "Sold out: the cap is reached" : `Mint edition ${chosen.minted + 1} of ${chosen.max_supply}`}
+            </button>
+          </>
+        )}
+      </section>
+    </div>
   );
 }

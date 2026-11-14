@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LOOKS, artUrl, lookOf, type AttackStyle, type Look } from "./catalog";
-import { EXPLORER, FACTORY_ID, Session, call, errorText, fmtNear, sessionKeyFor, type Settlement } from "./near";
+import { EXPLORER, FACTORY_ID, Session, call, errorText, fmtNear, sessionKeyFor, usableInArena, type Settlement } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Icon, fmtClock, useTimeLeft } from "./ui";
 
@@ -29,11 +29,14 @@ type Equip = { look: Look; power: number; onChain: boolean };
 export function Arena() {
   const c = useChain();
   const me = c.me?.accountId;
-  const leases = c.items.filter((i) => i.renter === me && !!sessionKeyFor(i) && i.rental_active);
+  // This arena is a game like any other: it honours its own items and its partner's, nothing else.
+  const myLeases = c.items.filter((i) => i.renter === me && !!sessionKeyFor(i) && i.rental_active);
+  const leases = myLeases.filter(usableInArena);
+  const foreign = myLeases.filter((i) => !usableInArena(i));
   const [chosen, setChosen] = useState<string | null>(c.arenaItem);
   const rentable = c.items
-    .filter((i) => i.listed && !i.renter && i.durability > 0 && i.owner !== me)
-    .sort((a, b) => b.power - a.power);
+    .filter((i) => i.listed && !i.renter && i.durability > 0 && i.owner !== me && usableInArena(i))
+    .sort((a, b) => (a.max_supply ?? 99) - (b.max_supply ?? 99) || b.power - a.power);
 
   useEffect(() => {
     if (c.arenaItem) setChosen(c.arenaItem);
@@ -208,6 +211,13 @@ export function Arena() {
           )}
         </div>
 
+        {foreign.length > 0 && (
+          <p className="warn small">
+            {foreign.map((i) => i.name).join(", ")} {foreign.length === 1 ? "belongs" : "belong"} to{" "}
+            {foreign[0].game_name ?? "another game"}, which this arena does not accept. Use{" "}
+            {foreign.length === 1 ? "it" : "them"} in {foreign.length === 1 ? "its" : "their"} own game.
+          </p>
+        )}
         {leases.length > 1 && (
           <div className="rack">
             <span className="rack-label">Switch gear</span>

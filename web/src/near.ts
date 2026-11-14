@@ -19,6 +19,16 @@ export const FAUCET_URL = "https://helper.testnet.near.org/account";
 export const EXPLORER = "https://testnet.nearblocks.io";
 export const DEMO_COLLECTION: string = (deployment as any).demoCollection || "";
 export const HOUSE_GAME: string = (deployment as any).houseGame || FACTORY_ID;
+/** The games whose items the demo arena honours: its own, plus its partner. */
+export const ARENA_GAMES: string[] = [HOUSE_GAME, DEMO_COLLECTION].filter(Boolean);
+export const usableInArena = (i: { game: string | null }) => !!i.game && ARENA_GAMES.includes(i.game);
+
+/** Suggested rent per hour from how hard the item is to get: fewer copies and more power cost more. */
+export function suggestedPrice(power: number, maxSupply: number | null): bigint {
+  const scarcity = Math.sqrt(10 / Math.max(1, maxSupply ?? 10));
+  const near = 0.02 * (power / 20) * scarcity;
+  return BigInt(Math.round(Math.max(0.01, Math.min(near, 2)) * 1e6)) * 10n ** 18n;
+}
 
 export const NEAR = 10n ** 24n;
 export const TGAS = 10n ** 12n;
@@ -62,6 +72,10 @@ export type ItemView = {
   game: string | null;
   game_name: string | null;
   origin: { contract: string; token_id: string } | null;
+  verified: boolean;
+  item_type: string | null;
+  edition: number | null;
+  max_supply: number | null;
 };
 
 export type ItemRef = {
@@ -71,6 +85,10 @@ export type ItemRef = {
   game: string | null;
   game_name: string | null;
   origin: { contract: string; token_id: string } | null;
+  verified: boolean;
+  item_type: string | null;
+  edition: number | null;
+  max_supply: number | null;
 };
 
 export type Settlement = {
@@ -110,10 +128,14 @@ export async function loadItems(): Promise<ItemView[]> {
   const refs = await view<ItemRef[]>(FACTORY_ID, "get_items", { limit: 100 });
   const items = await Promise.all(
     refs.map(async (r) => ({
-      ...(await view<Omit<ItemView, "game" | "game_name" | "origin">>(r.item_account, "get_item")),
+      ...(await view<Omit<ItemView, "game" | "game_name" | "origin" | "verified" | "item_type" | "edition" | "max_supply">>(r.item_account, "get_item")),
       game: r.game,
       game_name: r.game_name,
       origin: r.origin,
+      verified: r.verified,
+      item_type: r.item_type,
+      edition: r.edition,
+      max_supply: r.max_supply,
     })),
   );
   if (items.length) clockOffset = Number(items[0].now_ms) - Date.now();

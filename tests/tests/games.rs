@@ -33,7 +33,7 @@ fn item_args(item_type: &str, owner: Option<&AccountId>) -> Value {
 
 async fn define(game: &Account, f: &AccountId, type_id: &str, power: u32, max_supply: u32) -> anyhow::Result<()> {
     game.call(f, "define_item_type")
-        .args_json(json!({ "type_id": type_id, "name": type_id.replace('-', " "), "image": "flame-sword.svg", "power": power, "max_supply": max_supply }))
+        .args_json(json!({ "type_id": type_id, "name": type_id.replace('-', " "), "image": "flame-sword.svg", "power": power, "max_supply": max_supply, "stats": null }))
         .deposit(NearToken::from_millinear(10))
         .transact()
         .await?
@@ -235,8 +235,16 @@ async fn supply_caps_fixed_power_and_verified_games() -> anyhow::Result<()> {
     assert!(r.is_failure());
     assert!(format!("{r:?}").contains("item_type is required"));
 
-    // "Only 2 Dragon Lances will ever exist."
+    // "Only 2 Dragon Lances will ever exist", with the game's own stats.
     define(&game, f.id(), "dragon-lance", 60, 2).await?;
+    game.call(f.id(), "set_type_stats")
+        .args_json(json!({ "type_id": "dragon-lance", "stats": [{ "name": "Attack", "value": 60 }, { "name": "defence", "value": 15 }, { "name": "speed", "value": 22 }] }))
+        .transact().await?.into_result()?;
+    // Stats, like the type, are fixed once set.
+    let r = game.call(f.id(), "set_type_stats")
+        .args_json(json!({ "type_id": "dragon-lance", "stats": [{ "name": "attack", "value": 999 }] }))
+        .transact().await?;
+    assert!(r.is_failure());
     // A type can never be redefined to raise its cap or power.
     let r = game.call(f.id(), "define_item_type")
         .args_json(json!({ "type_id": "dragon-lance", "name": "Dragon Lance", "image": "x.svg", "power": 999, "max_supply": 9999 }))
@@ -250,6 +258,9 @@ async fn supply_caps_fixed_power_and_verified_games() -> anyhow::Result<()> {
     assert_eq!(first["edition"], 1);
     assert_eq!(first["max_supply"], 2);
     assert_eq!(first["item_type"], "dragon-lance");
+    assert_eq!(first["stats"][0]["name"], "attack");
+    assert_eq!(first["stats"][0]["value"], 60);
+    assert_eq!(first["stats"].as_array().unwrap().len(), 3);
     let item: AccountId = first["item_account"].as_str().unwrap().parse()?;
     let v: Value = worker.view(&item, "get_item").await?.json()?;
     assert_eq!(v["power"], 60);
