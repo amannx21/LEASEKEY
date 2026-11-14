@@ -2,7 +2,7 @@
 
 ## Setup before recording
 
-- `npm run dev`, open http://localhost:5173 in **two browser profiles** (or one normal and one incognito window). Each gets its own guest account.
+- Use the live site https://leasekey.vercel.app (or `npm run dev` and http://localhost:5173) in **two browser profiles** (or one normal and one incognito window). Each gets its own guest account.
 - Window A is the **owner**. Window B is the **renter**.
 - In both windows click **Play as guest** and wait for the account name to appear.
 - In window A, prepare an item to lend: **My Items**, **Bring an item from another game**, **Claim Ember Greataxe**, select it, **Wrap and make rentable**. This takes about 20 seconds, so do it before recording.
@@ -37,4 +37,4 @@
 >
 > @NEARProtocol #NEARHackathon
 >
-> [repo link] [demo video]
+> https://leasekey.vercel.app · https://github.com/amannx21/LEASEKEY [demo video]

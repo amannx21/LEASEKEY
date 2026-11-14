@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://leasekey.vercel.app"><b>Try it live</b></a> ·
   <a href="#see-it"><b>See it</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#run-it"><b>Run it</b></a> ·
@@ -183,6 +184,8 @@ if (access.ok) equip(itemId, access.power, access.endsAt);
 - **Bring an existing collection.** Players can deposit NFTs they already own from an integrated game. LeaseKey holds the original, applies the game's own stats, and returns it on request.
 
 ## Live on testnet
+
+**Try it: [leasekey.vercel.app](https://leasekey.vercel.app)**. Click "Play as guest" for a free throwaway testnet account, rent anything in the Armory and fight in the Arena. No wallet needed.
 
 | | Account |
 |---|---|
