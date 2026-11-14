@@ -645,9 +645,10 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
 .dst { width: 100vw; height: 100dvh; opacity: 0; }
 [data-ht="dust"] .home > .hero .hero-canvas { opacity: calc(1 - clamp(0, (var(--hp, 0) - 0.03) / 0.04, 1)); }
 [data-ht="dust"] .home > .hero .hero-copy { opacity: calc(1 - clamp(0, (var(--hp, 0) - 0.02) / 0.12, 1)); }
-[data-ht="dust"] .home > .problem h2 { opacity: clamp(0, (var(--hp, 0) - 0.86) / 0.08, 1); }
+[data-ht="dust"] .home > .problem h2 { --solid: clamp(0, (var(--hp, 0) - 0.78) / 0.17, 1);
+  opacity: var(--solid); filter: blur(calc((1 - var(--solid)) * 3px)); }
 
 @media (prefers-reduced-motion: reduce) {
   .dst { display: none; }
-  [data-ht] .home > .hero .hero-canvas, [data-ht] .home > .hero .hero-copy, [data-ht] .home > .problem h2 { opacity: 1; }
+  [data-ht] .home > .hero .hero-canvas, [data-ht] .home > .hero .hero-copy, [data-ht] .home > .problem h2 { opacity: 1; filter: none; }
 }

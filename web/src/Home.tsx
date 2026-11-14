@@ -116,27 +116,32 @@ function DustOverlay() {
         const i = (y * hero.width + x) * 4;
         if (img[i + 3] > 120) src.push({ x: x * kx, y: y * ky, r: img[i], g: img[i + 1], b: img[i + 2] });
       }
-      // targets: the next heading drawn exactly as the page lays it out, relative to the heading
+      // targets: every letter of the next heading drawn where the page itself put it (per-character rects
+      // from the layout, so wrapping and letter spacing match), so the dust lands on the real glyphs
       const cs = getComputedStyle(head);
       const size = parseFloat(cs.fontSize);
-      const lh = parseFloat(cs.lineHeight) || size * 1.15;
+      const pad = 6;
       const off = document.createElement("canvas");
-      off.width = Math.ceil(tr.width); off.height = Math.ceil(tr.height);
+      off.width = Math.ceil(tr.width) + pad * 2; off.height = Math.ceil(tr.height) + pad * 2;
       const o = off.getContext("2d")!;
-      o.font = `${cs.fontWeight} ${size}px ${cs.fontFamily}`;
-      o.textBaseline = "middle"; o.fillStyle = "#fff";
-      const words = (head.textContent || "").split(/\s+/);
-      let line = "", row = 0;
-      for (const w of words) {
-        const test = line ? line + " " + w : w;
-        if (o.measureText(test).width > tr.width && line) { o.fillText(line, 0, row * lh + lh / 2); line = w; row++; }
-        else line = test;
+      o.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+      o.textBaseline = "alphabetic"; o.fillStyle = "#fff";
+      const ascent = o.measureText("Hg").fontBoundingBoxAscent || size * 0.8;
+      const range = document.createRange();
+      const walk = document.createTreeWalker(head, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const text = n.textContent || "";
+        for (let i = 0; i < text.length; i++) {
+          if (/\s/.test(text[i])) continue;
+          range.setStart(n, i); range.setEnd(n, i + 1);
+          const r = range.getClientRects()[0];
+          if (r) o.fillText(text[i], r.left - tr.left + pad, r.top - tr.top + pad + ascent);
+        }
       }
-      if (line) o.fillText(line, 0, row * lh + lh / 2);
       const td = o.getImageData(0, 0, off.width, off.height).data;
       const tgt: { x: number; y: number }[] = [];
       const ts = Math.max(2, Math.round(size / 22));
-      for (let y = 0; y < off.height; y += ts) for (let x = 0; x < off.width; x += ts) if (td[(y * off.width + x) * 4 + 3] > 128) tgt.push({ x, y });
+      for (let y = 0; y < off.height; y += ts) for (let x = 0; x < off.width; x += ts) if (td[(y * off.width + x) * 4 + 3] > 128) tgt.push({ x: x - pad, y: y - pad });
       if (!src.length || !tgt.length) return;
       parts.current = src.map((s, i) => {
         const t = tgt[Math.floor((i * tgt.length) / src.length)];
@@ -147,8 +152,9 @@ function DustOverlay() {
     const ctx = canvas.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    canvas.style.opacity = String(1 - Math.min(1, Math.max(0, (p - 0.9) / 0.08)));
-    const m = Math.min(1, Math.max(0, (p - 0.05) / 0.8));
+    // the dust has landed by ~0.76; it then fades out (0.8-0.97) while the real heading fades in over it
+    canvas.style.opacity = String(1 - Math.min(1, Math.max(0, (p - 0.8) / 0.17)));
+    const m = Math.min(1, Math.max(0, (p - 0.05) / 0.7));
     for (const q of parts.current) {
       const local = Math.min(1, Math.max(0, m * 1.25 - Math.abs(q.w) * 0.25));
       const e = local < 0.5 ? 4 * local ** 3 : 1 - (-2 * local + 2) ** 3 / 2;
@@ -157,7 +163,9 @@ function DustOverlay() {
       const x = ax + (bx - ax) * e + Math.sin(e * Math.PI) * 110 * q.w;
       const y = ay + (by - ay) * e;
       ctx.fillStyle = `rgb(${Math.round(q.r + (243 - q.r) * e)},${Math.round(q.g + (234 - q.g) * e)},${Math.round(q.b + (215 - q.b) * e)})`;
-      ctx.fillRect(x, y, 1.8, 1.8);
+      // grains swell slightly as they settle so the dotted letters close up toward solid strokes
+      const s = 1.6 + 0.9 * e * e;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
     }
   }, []);
   useHeroProgress(onP);
