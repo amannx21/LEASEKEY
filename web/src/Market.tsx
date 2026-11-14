@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CLASSES, artUrl, lookOf, rarityOf, type ItemClass } from "./catalog";
 import { GAS_BUDGET, fmtNear, sessionKeyFor, short, usableInArena, type ItemView } from "./near";
 import { useChain } from "./store";
-import { AccountLink, Countdown, Durability, Icon, StatusBadge, statusOf } from "./ui";
+import { AccountLink, Countdown, Durability, Icon, StatBars, StatusBadge, statusOf } from "./ui";
 
 const DURATIONS: [number, string][] = [
   [120, "2 min"],
@@ -158,10 +158,14 @@ function ItemCard({ item, me, onOpen }: { item: ItemView; me?: string; onOpen: (
         </span>
         <span className={item.owner === me ? "yours" : ""}>{item.owner === me ? "Yours" : `Owner ${short(item.owner)}`}</span>
       </span>
-      <span className="item-power" aria-label={`Power ${item.power}`}>
-        <span className="pw-track"><span style={{ width: `${Math.min(100, (item.power / 80) * 100)}%` }} /></span>
-        <span className="num">{item.power}</span>
-      </span>
+      {item.stats.length ? (
+        <StatBars stats={item.stats} compact />
+      ) : (
+        <span className="item-power" aria-label={`Power ${item.power}`}>
+          <span className="pw-track"><span style={{ width: `${Math.min(100, (item.power / 80) * 100)}%` }} /></span>
+          <span className="num">{item.power}</span>
+        </span>
+      )}
       <span className="item-foot">
         <span><b className="num">{fmtNear(item.price_per_hour)}</b> NEAR / hr</span>
         {status === "rented" ? (
@@ -207,6 +211,12 @@ function ItemSheet({ item, onClose }: { item: ItemView; onClose: () => void }) {
           <h2>{item.name}</h2>
           <p className="sheet-tag">{look.tagline}</p>
 
+          {item.stats.length > 0 && (
+            <div className="sheet-stats">
+              <h3>{item.game_name ?? "Game"} stats</h3>
+              <StatBars stats={item.stats} />
+            </div>
+          )}
           <dl className="stats">
             <div><dt>Power</dt><dd className="num">{item.power}</dd></div>
             <div><dt>Price</dt><dd><b className="num">{fmtNear(item.price_per_hour)}</b> NEAR / hr</dd></div>

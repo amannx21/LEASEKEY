@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { KeyPair } from "near-api-js";
 import {
   DEPLOYMENT_FILE, KEYS_DIR, ROOT, TGAS, accountFor, createFaucetAccount, fmt, near, provider,
-  randomSuffix, retry, saveKey, setupGuestBank, view, type Deployment,
+  STATS, randomSuffix, retry, saveKey, setupGuestBank, view, type Deployment,
 } from "./common.ts";
 
 const MODE = (process.env.MODE ?? "global") as "global" | "embedded";
@@ -114,7 +114,10 @@ async function main() {
     const typeId = it.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     await retry("define", () => factory.callFunction({
       contractId: factoryId, methodName: "define_item_type",
-      args: { type_id: typeId, name: it.name, image: it.image, power: it.power, max_supply: SUPPLY[it.name] ?? 5 },
+      args: {
+        type_id: typeId, name: it.name, image: it.image, power: it.power, max_supply: SUPPLY[it.name] ?? 5,
+        stats: (STATS[typeId] ?? []).map(([name, value]) => ({ name, value })),
+      },
       deposit: near("0.01"),
     }));
     const minted = await factory.callFunction<{ token_id: string; item_account: string } | null>({

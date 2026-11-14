@@ -76,7 +76,14 @@ export type ItemView = {
   item_type: string | null;
   edition: number | null;
   max_supply: number | null;
+  stats: Stat[];
 };
+
+export type Stat = { name: string; value: number };
+
+/** A stat by name, or a fallback (e.g. power for attack) when the game did not set it. */
+export const statOf = (i: { stats: Stat[] }, name: string, fallback = 0) =>
+  i.stats.find((s) => s.name === name)?.value ?? fallback;
 
 export type ItemRef = {
   token_id: string;
@@ -89,6 +96,7 @@ export type ItemRef = {
   item_type: string | null;
   edition: number | null;
   max_supply: number | null;
+  stats: Stat[];
 };
 
 export type Settlement = {
@@ -128,7 +136,7 @@ export async function loadItems(): Promise<ItemView[]> {
   const refs = await view<ItemRef[]>(FACTORY_ID, "get_items", { limit: 100 });
   const items = await Promise.all(
     refs.map(async (r) => ({
-      ...(await view<Omit<ItemView, "game" | "game_name" | "origin" | "verified" | "item_type" | "edition" | "max_supply">>(r.item_account, "get_item")),
+      ...(await view<Omit<ItemView, "game" | "game_name" | "origin" | "verified" | "item_type" | "edition" | "max_supply" | "stats">>(r.item_account, "get_item")),
       game: r.game,
       game_name: r.game_name,
       origin: r.origin,
@@ -136,6 +144,7 @@ export async function loadItems(): Promise<ItemView[]> {
       item_type: r.item_type,
       edition: r.edition,
       max_supply: r.max_supply,
+      stats: r.stats ?? [],
     })),
   );
   if (items.length) clockOffset = Number(items[0].now_ms) - Date.now();

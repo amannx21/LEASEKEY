@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LOOKS, artUrl, lookOf, type AttackStyle, type Look } from "./catalog";
-import { EXPLORER, FACTORY_ID, Session, call, errorText, fmtNear, sessionKeyFor, usableInArena, type Settlement } from "./near";
+import { EXPLORER, FACTORY_ID, Session, call, errorText, fmtNear, sessionKeyFor, statOf, usableInArena, type Settlement } from "./near";
 import { useChain } from "./store";
 import { AccountLink, Icon, fmtClock, useTimeLeft } from "./ui";
 
@@ -24,7 +24,8 @@ const STYLE_INFO: Record<AttackStyle, string> = {
   guard: "Shield bash, and you take half damage",
 };
 
-type Equip = { look: Look; power: number; onChain: boolean };
+/** What the hero holds. Stats come from the item's game: attack hits, defence blocks, speed swings faster, endurance heals. */
+type Equip = { look: Look; power: number; onChain: boolean; defence: number; speed: number; endurance: number };
 
 export function Arena() {
   const c = useChain();
@@ -69,7 +70,11 @@ export function Arena() {
 
   const armedOnChain = !!session && timeLeft > 0 && usesLeft > 0 && item!.durability > 0;
   const equip: Equip | null = armedOnChain
-    ? { look: lookOf(item!.image), power: item!.power, onChain: true }
+    ? {
+        look: lookOf(item!.image), onChain: true,
+        power: statOf(item!, "attack", item!.power),
+        defence: statOf(item!, "defence"), speed: statOf(item!, "speed"), endurance: statOf(item!, "endurance"),
+      }
     : null;
 
   const pushFeed = useCallback((entry: Omit<Feed, "id">) => {
@@ -157,6 +162,11 @@ export function Arena() {
               <small>
                 {equip ? STYLE_INFO[equip.look.style] : `${FIST_DAMAGE} damage. Rent gear to hit far harder.`}
               </small>
+              {equip && (
+                <small className="num">
+                  attack {equip.power} · defence {equip.defence} · speed {equip.speed} · endurance {equip.endurance}
+                </small>
+              )}
               {session && item && (
                 <small>
                   {timeLeft > 0 ? (
@@ -378,7 +388,8 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     }
     const { look, power, onChain } = eq;
     const [c1, c2] = look.colors;
-    cooldown = look.style === "smash" || look.style === "wave" ? 0.55 : 0.3;
+    // speed shortens the cooldown, down to half
+    cooldown = (look.style === "smash" || look.style === "wave" ? 0.55 : 0.3) * (1 - Math.min(0.5, eq.speed / 80));
     if (onChain) game.current.strike(look.style);
     const y = GROUND - 62;
     switch (look.style) {
@@ -429,6 +440,12 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
 
   const update = (dt: number) => {
     t += dt;
+    // endurance slowly heals the hero
+    const eqNow = game.current.equip;
+    if (eqNow && !over && heroHp < 100 && eqNow.endurance > 0) {
+      heroHp = Math.min(100, heroHp + eqNow.endurance * 0.04 * dt);
+      game.current.setHp(Math.round(heroHp));
+    }
     cooldown = Math.max(0, cooldown - dt);
     swing = Math.max(0, swing - dt);
     hurt = Math.max(0, hurt - dt);
@@ -459,7 +476,9 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       s.flash = Math.max(0, s.flash - dt);
       if (!over && s.hp > 0 && s.x < HERO_X + 46) {
         s.hp = 0;
-        heroHp = Math.max(0, heroHp - (guard ? 6 : 12) * (s.size > 40 ? 3 : 1));
+        // defence blocks part of every hit, up to 70%
+        const block = Math.min(0.7, (game.current.equip?.defence ?? 0) / 80) + (guard ? 0.2 : 0);
+        heroHp = Math.max(0, heroHp - 12 * (1 - Math.min(0.8, block)) * (s.size > 40 ? 3 : 1));
         hurt = 0.3;
         shake = 0.2;
         game.current.setHp(heroHp);

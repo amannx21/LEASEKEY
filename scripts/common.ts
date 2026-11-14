@@ -150,3 +150,19 @@ export async function setupGuestBank(factoryId: string, amount: bigint): Promise
   d.guestBank = { accountId: bankId, secretKey: keyPair.toString() };
   writeFileSync(DEPLOYMENT_FILE, JSON.stringify(d, null, 2) + "\n");
 }
+
+/** Game stats of the demo item types, by type id. */
+export const STATS: Record<string, [string, number][]> = {
+  "flame-sword": [["attack", 40], ["defence", 8], ["speed", 16], ["endurance", 20]],
+  "frost-bow": [["attack", 28], ["defence", 4], ["speed", 26], ["endurance", 14]],
+  "thunder-hammer": [["attack", 60], ["defence", 12], ["speed", 6], ["endurance", 30]],
+  "shadow-dagger": [["attack", 18], ["defence", 2], ["speed", 34], ["endurance", 10]],
+  "guardian-shield": [["attack", 12], ["defence", 40], ["speed", 8], ["endurance", 34]],
+  "storm-staff": [["attack", 34], ["defence", 6], ["speed", 18], ["endurance", 16]],
+  "plasma-blaster": [["attack", 22], ["defence", 4], ["speed", 30], ["endurance", 12]],
+  "aegis-plate": [["attack", 8], ["defence", 55], ["speed", 4], ["endurance", 45]],
+  "seraph-helm": [["attack", 6], ["defence", 30], ["speed", 12], ["endurance", 38]],
+  "astral-gauntlet": [["attack", 70], ["defence", 20], ["speed", 14], ["endurance", 40]],
+  "photon-saber": [["attack", 45], ["defence", 10], ["speed", 28], ["endurance", 18]],
+  "tide-trident": [["attack", 38], ["defence", 14], ["speed", 12], ["endurance", 26]],
+};

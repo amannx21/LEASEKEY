@@ -91,3 +91,23 @@ export function Icon({ name, size = 18 }: { name: "key" | "shield" | "clock" | "
     </svg>
   );
 }
+
+const STAT_COLORS: Record<string, string> = {
+  attack: "#ff7a3d", defence: "#5cc8ff", defense: "#5cc8ff", speed: "#4fd08a", endurance: "#c58bff",
+};
+
+/** The game's own stats for an item, as bars. Games name their stats; unknown names get gold. */
+export function StatBars({ stats, max = 80, compact = false }: { stats: { name: string; value: number }[]; max?: number; compact?: boolean }) {
+  if (!stats.length) return null;
+  return (
+    <span className={`stat-bars ${compact ? "compact" : ""}`}>
+      {stats.map((s) => (
+        <span key={s.name} className="stat" title={`${s.name} ${s.value}`}>
+          <span className="stat-name">{s.name}</span>
+          <span className="stat-track"><i style={{ width: `${Math.min(100, (s.value / max) * 100)}%`, background: STAT_COLORS[s.name] ?? "var(--gold)" }} /></span>
+          <span className="stat-val num">{s.value}</span>
+        </span>
+      ))}
+    </span>
+  );
+}

@@ -472,3 +472,15 @@ pre code { background: none; padding: 0; color: #e6dcff; font-size: inherit; }
 .type-list button.on { border-color: var(--gold); background: rgba(233, 178, 63, 0.12); }
 .type-list img { width: 40px; height: 40px; }
 .type-list small { display: block; color: var(--muted); font-weight: 500; }
+
+/* game stats */
+.stat-bars { display: grid; gap: 6px; }
+.stat-bars.compact { grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.stat { display: grid; grid-template-columns: 74px 1fr 26px; gap: 8px; align-items: center; font-size: 12.5px; }
+.stat-bars.compact .stat { grid-template-columns: 52px 1fr 20px; gap: 6px; font-size: 11.5px; }
+.stat-name { color: var(--muted); text-transform: capitalize; font-weight: 700; }
+.stat-track { height: 6px; background: rgba(0, 0, 0, 0.35); border-radius: 99px; overflow: hidden; }
+.stat-track i { display: block; height: 100%; border-radius: 99px; }
+.stat-val { text-align: right; font-weight: 700; }
+.sheet-stats { margin: 16px 0 4px; padding: 16px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+.sheet-stats h3 { font-family: var(--body); font-weight: 800; font-size: 14px; margin-bottom: 10px; }
