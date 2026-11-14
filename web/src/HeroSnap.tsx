@@ -20,23 +20,24 @@ const LINES = [
 const TARGET = { x: 520, y: 200 }; // where the beam lands
 
 // timeline, ms
-const T_RISE = 700;
-const T_CHARGE = 1550;
-const T_SWING = 1720;
-const T_BEAM_END = 2450;
-const T_EMIT_SPAN = 900;
-const T_FLIGHT = 1150;
-const T_SETTLE = T_SWING + T_EMIT_SPAN + T_FLIGHT + 250;
-const T_FINAL_STRIKE = T_SETTLE + 150;
-const T_DONE = T_FINAL_STRIKE + 1400;
+// Timeline, ms. The whole sequence is about 2.5 seconds: nobody should wait for a headline.
+const T_RISE = 300;
+const T_CHARGE = 680;
+const T_SWING = 800;
+const T_BEAM_END = 1250;
+const T_EMIT_SPAN = 420;
+const T_FLIGHT = 700;
+const T_SETTLE = T_SWING + T_EMIT_SPAN + T_FLIGHT + 120;
+const T_FINAL_STRIKE = T_SETTLE + 60;
+const T_DONE = T_FINAL_STRIKE + 800;
 
 // thunder strikes: when, and where they land (relative to the canvas)
 const STRIKES = [
   { t: T_SWING + 30, x: 600, y: 120 },
-  { t: T_SWING + 260, x: 1030, y: 320 },
-  { t: T_SWING + 520, x: 250, y: 150 },
-  { t: T_SWING + 840, x: 900, y: 120 },
-  { t: T_SWING + 1200, x: 60, y: 300 },
+  { t: T_SWING + 180, x: 1030, y: 320 },
+  { t: T_SWING + 360, x: 250, y: 150 },
+  { t: T_SWING + 560, x: 900, y: 120 },
+  { t: T_SWING + 820, x: 60, y: 300 },
   { t: T_FINAL_STRIKE, x: 760, y: 170 },
 ];
 
@@ -348,7 +349,7 @@ export function HeroSnap({ onEnter, onArena }: { onEnter: () => void; onArena: (
           out.push({
             tx: x + Math.random() * 1.5, ty: y + Math.random() * 1.5, sx, sy,
             cx: lerp(sx, x, 0.5) + (Math.random() - 0.5) * 160, cy: Math.min(sy, y) - 60 - Math.random() * 120,
-            delay: T_SWING + 60 + clamp((x - 440) / 680) * T_EMIT_SPAN + Math.random() * 200,
+            delay: T_SWING + 40 + clamp((x - 440) / 680) * T_EMIT_SPAN + Math.random() * 120,
             dur: T_FLIGHT * (0.75 + Math.random() * 0.5),
             size: 1.4 + Math.random() * 1.8, hue: Math.random(), wob: Math.random() * Math.PI * 2,
           });

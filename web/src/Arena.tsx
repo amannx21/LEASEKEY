@@ -24,7 +24,7 @@ const STYLE_INFO: Record<AttackStyle, string> = {
   blast: "Three-shot plasma burst",
   beam: "Light blade that cuts straight through a whole line",
   wave: "Shockwave that rolls across the entire field",
-  guard: "Shield bash, and you take half damage",
+  guard: "Blocks every fireball and goo, and bashes back",
 };
 
 /** What the hero holds. Stats come from the item's game: attack hits, defence blocks, speed swings faster, endurance heals. */
@@ -360,8 +360,12 @@ export function Arena() {
 
 // =================================================================== game
 
-type Slime = { x: number; y: number; hp: number; max: number; speed: number; phase: number; flash: number; size: number; hue: number; kb: number };
-type Shot = { x: number; y: number; vx: number; power: number; pierce: number; color: string; kind: "arrow" | "plasma"; hit: Set<Slime> };
+type Slime = { x: number; y: number; hp: number; max: number; speed: number; phase: number; flash: number; size: number; hue: number; kb: number; spitter: boolean; spit: number };
+type Shot = { x: number; y: number; vx: number; vy: number; power: number; pierce: number; color: string; kind: "arrow" | "plasma"; hit: Set<Slime | Dragon> };
+/** Flies across the sky and breathes fire at the hero. Only ranged weapons and lightning reach it. */
+type Dragon = { x: number; y: number; vx: number; hp: number; max: number; flap: number; breath: number; breathCd: number; flash: number; fall: number };
+/** Something thrown at the hero: slime goo or dragon fire. A shield stops it. */
+type Hazard = { x: number; y: number; vx: number; vy: number; kind: "goo" | "fire"; dmg: number; life: number };
 type Fx =
   | { t: "arc"; life: number; max: number; color: string; color2: string }
   | { t: "ring"; x: number; y: number; r: number; vr: number; life: number; color: string }
@@ -398,12 +402,19 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
   let sparks: Spark[] = [];
   let floats: Float[] = [];
   let pending: { at: number; fn: () => void }[] = [];
+  let dragons: Dragon[] = [];
+  let hazards: Hazard[] = [];
+  let nextDragon = 7;
+  let shieldFlash = 0;
+  let breathEmit = 0;
+  const HERO_CHEST = { x: HERO_X + 14, y: GROUND - 74 };
   let heroHp = 100, kills = 0, swing = 0, hurt = 0, cooldown = 0, spawnIn = 1, over = false, t = 0, shake = 0;
   let raf = 0, last = performance.now();
   const stars = Array.from({ length: 90 }, (_, i) => ({ x: (i * 211) % W, y: (i * 97) % 260, s: (i % 3) + 1, p: i }));
 
   const reset = () => {
     slimes = []; shots = []; fx = []; sparks = []; floats = []; pending = [];
+    dragons = []; hazards = []; nextDragon = t + 7; shieldFlash = 0;
     heroHp = 100; kills = 0; over = false; spawnIn = 1;
     game.current.setScore(0); game.current.setHp(100);
   };
@@ -432,6 +443,50 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
   };
 
   const alive = () => slimes.filter((s) => s.hp > 0);
+  const flyingDragons = () => dragons.filter((d) => d.hp > 0);
+
+  const hitDragon = (d: Dragon, amount: number, color: string) => {
+    if (d.hp <= 0) return;
+    const dmg = Math.round(amount);
+    d.hp -= dmg;
+    d.flash = 0.12;
+    floats.push({ x: d.x, y: d.y - 46, text: `-${dmg}`, life: 0.8, color });
+    burst(d.x, d.y, color, 8);
+    if (d.hp <= 0) {
+      d.fall = 0.01;
+      d.breath = 0;
+      kills += 3;
+      game.current.setScore(kills);
+      burst(d.x, d.y, "#ff9a3d", 34, 340);
+      floats.push({ x: d.x, y: d.y - 70, text: "Dragon down", life: 1.4, color: "#ffd27a" });
+    }
+  };
+
+  /** A hazard reaches the hero. Only a rented shield blocks it; without one, every hit lands. */
+  const hitHero = (h: Hazard) => {
+    const eq = game.current.equip;
+    const guard = eq?.look.style === "guard";
+    if (guard) {
+      shieldFlash = 0.35;
+      floats.push({ x: HERO_CHEST.x + 50, y: HERO_CHEST.y - 30, text: "BLOCKED", life: 0.8, color: "#9fe8ff" });
+      // deflected back and away
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.2) * 1.6;
+        const v = 140 + Math.random() * 220;
+        sparks.push({ x: HERO_CHEST.x + 46, y: h.y, vx: Math.abs(Math.cos(a)) * v, vy: Math.sin(a) * v, life: 0.5, color: h.kind === "fire" ? "#ffb347" : "#7ee081", size: 3 });
+      }
+      return;
+    }
+    // only a shield blocks; armour defence still softens the blow, up to half
+    const taken = Math.max(1, Math.round(h.dmg * (1 - Math.min(0.5, (eq?.defence ?? 0) / 120))));
+    heroHp = Math.max(0, heroHp - taken);
+    hurt = 0.3;
+    shake = 0.15;
+    game.current.setHp(Math.round(heroHp));
+    floats.push({ x: HERO_CHEST.x, y: HERO_CHEST.y - 40, text: `-${taken}`, life: 0.8, color: "#ff6b6b" });
+    burst(HERO_CHEST.x, h.y, h.kind === "fire" ? "#ff7a3d" : "#7ee081", 10);
+    if (heroHp <= 0) over = true;
+  };
 
   const attack = () => {
     if (over) return reset();
@@ -458,13 +513,22 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
       case "beam":
         fx.push({ t: "beam", life: 0.3, color: c1 });
         alive().forEach((s) => damage(s, power * 0.8, c1, 10));
+        flyingDragons().filter((d) => d.x > HERO_X).forEach((d) => hitDragon(d, power * 0.8, c1));
         break;
-      case "arrow":
-        shots.push({ x: HERO_X + 60, y, vx: 1500, power, pierce: 3, color: c1, kind: "arrow", hit: new Set() });
+      case "arrow": {
+        // with a dragon overhead, the bow aims up at it
+        const d = flyingDragons().find((dd) => dd.x > HERO_X + 120);
+        const vy = d ? ((d.y - y) / Math.max(120, d.x - HERO_X)) * 1500 : 0;
+        shots.push({ x: HERO_X + 60, y, vx: 1500, vy, power, pierce: 3, color: c1, kind: "arrow", hit: new Set() });
         break;
+      }
       case "blast":
         for (let k = 0; k < 3; k++) {
-          pending.push({ at: t + k * 0.09, fn: () => shots.push({ x: HERO_X + 74, y: y + (k - 1) * 8, vx: 1150, power: power * 0.55, pierce: 1, color: k % 2 ? c2 : c1, kind: "plasma", hit: new Set() }) });
+          pending.push({ at: t + k * 0.09, fn: () => {
+            const d = flyingDragons().find((dd) => dd.x > HERO_X + 120);
+            const vy = d ? ((d.y - y) / Math.max(120, d.x - HERO_X)) * 1150 : 0;
+            shots.push({ x: HERO_X + 74, y: y + (k - 1) * 8, vx: 1150, vy, power: power * 0.55, pierce: 1, color: k % 2 ? c2 : c1, kind: "plasma", hit: new Set() });
+          } });
         }
         break;
       case "smash":
@@ -474,7 +538,15 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         alive().filter((s) => s.x - HERO_X < 380).forEach((s) => damage(s, power, c2, 70));
         break;
       case "bolt": {
-        const targets = alive().sort((a, b) => a.x - b.x).slice(0, 2);
+        // lightning finds a dragon first
+        const d = flyingDragons()[0];
+        if (d) {
+          const pts: number[] = [];
+          for (let yy = 0; yy < d.y; yy += 30) pts.push(d.x + (Math.random() - 0.5) * 40);
+          fx.push({ t: "bolt", x: d.x, life: 0.22, pts });
+          hitDragon(d, power * 1.2, c1);
+        }
+        const targets = alive().sort((a, b) => a.x - b.x).slice(0, d ? 1 : 2);
         targets.forEach((s) => {
           const pts: number[] = [];
           for (let yy = 0; yy < s.y; yy += 40) pts.push(s.x + (Math.random() - 0.5) * 50);
@@ -519,6 +591,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
           x: W + 40, y: GROUND, hp: max, max, speed: (king ? 26 : 44 + Math.random() * 30) + kills * 0.3,
           phase: Math.random() * 6, flash: 0, size: king ? 52 : 20 + Math.random() * 10,
           hue: king ? 280 : [130, 160, 200, 300, 40][Math.floor(Math.random() * 5)], kb: 0,
+          spitter: !king && Math.random() < 0.55, spit: 1.2 + Math.random() * 1.8,
         });
       }
     }
@@ -544,8 +617,89 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
         if (heroHp <= 0) over = true;
       }
     }
+    // slimes in range lob goo at the hero
+    for (const s of slimes) {
+      if (!s.spitter || s.hp <= 0 || over) continue;
+      s.spit -= dt;
+      if (s.spit <= 0 && s.x > HERO_X + 160 && s.x < W - 60) {
+        s.spit = 2.4 + Math.random() * 2;
+        const T = 0.95;
+        const sy = s.y - s.size * 1.6;
+        const vx = (HERO_CHEST.x + 30 - s.x) / T;
+        const vy = (HERO_CHEST.y - sy) / T - 0.5 * 900 * T;
+        hazards.push({ x: s.x - s.size, y: sy, vx, vy, kind: "goo", dmg: 6, life: 2 });
+        s.flash = 0.06;
+      }
+    }
+
+    // dragons cross the sky and breathe fire as they pass over the hero
+    if (!over && t >= nextDragon && flyingDragons().length === 0) {
+      nextDragon = t + 14 + Math.random() * 6;
+      const max = 150 + kills * 3;
+      dragons.push({ x: W + 140, y: 96 + Math.random() * 50, vx: -110, hp: max, max, flap: 0, breath: 0, breathCd: 0.4, flash: 0, fall: 0 });
+      floats.push({ x: W - 180, y: 70, text: "A dragon approaches", life: 1.6, color: "#ffb347" });
+    }
+    for (const d of dragons) {
+      d.flap += dt * 7;
+      d.flash = Math.max(0, d.flash - dt);
+      if (d.fall > 0) {
+        d.fall += dt;
+        d.y += 260 * d.fall * dt * 6;
+        d.x += d.vx * 0.4 * dt;
+        continue;
+      }
+      d.x += d.vx * dt;
+      d.y += Math.sin(d.flap * 0.5) * 12 * dt;
+      d.breathCd -= dt;
+      if (d.breath <= 0 && d.breathCd <= 0 && d.x > HERO_X + 220 && d.x < HERO_X + 700) {
+        d.breath = 1.1;
+        d.breathCd = 2.2;
+      }
+      if (d.breath > 0) {
+        d.breath -= dt;
+        breathEmit -= dt;
+        while (breathEmit <= 0) {
+          breathEmit += 0.045;
+          const mx = d.x - 70;
+          const my = d.y + 14;
+          const dx = HERO_CHEST.x - mx;
+          const dy = HERO_CHEST.y - my + (Math.random() - 0.5) * 40;
+          const len = Math.hypot(dx, dy);
+          const sp = 560 + Math.random() * 80;
+          hazards.push({ x: mx, y: my, vx: (dx / len) * sp, vy: (dy / len) * sp, kind: "fire", dmg: 3, life: 1.6 });
+        }
+      }
+    }
+    dragons = dragons.filter((d) => d.x > -200 && d.y < H + 80);
+
+    for (const h of hazards) {
+      h.life -= dt;
+      h.x += h.vx * dt;
+      h.y += h.vy * dt;
+      if (h.kind === "goo") h.vy += 900 * dt;
+      // the shield (or the hero) is just in front of the chest
+      if (!over && h.life > 0 && h.x < HERO_CHEST.x + 52 && h.x > HERO_CHEST.x - 30 && h.y > GROUND - 150 && h.y < GROUND) {
+        h.life = 0;
+        hitHero(h);
+      }
+      if (h.y > GROUND) {
+        h.life = 0;
+        burst(h.x, GROUND - 2, h.kind === "fire" ? "#ff9a3d" : "#7ee081", 4, 120);
+      }
+    }
+    hazards = hazards.filter((h) => h.life > 0);
+    shieldFlash = Math.max(0, shieldFlash - dt);
+
     for (const sh of shots) {
       sh.x += sh.vx * dt;
+      sh.y += sh.vy * dt;
+      for (const d of dragons) {
+        if (sh.pierce > 0 && d.hp > 0 && !sh.hit.has(d) && Math.abs(d.x - sh.x) < 70 && Math.abs(d.y - sh.y) < 40) {
+          sh.hit.add(d);
+          sh.pierce -= 1;
+          hitDragon(d, sh.power, sh.color);
+        }
+      }
       for (const s of slimes) {
         if (sh.pierce > 0 && s.hp > 0 && !sh.hit.has(s) && Math.abs(s.x - sh.x) < s.size + 6) {
           sh.hit.add(s);
@@ -569,7 +723,7 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     }
     fx = fx.filter((f) => f.life > 0 && !(f.t === "wave" && f.x > W + 100));
     slimes = slimes.filter((s) => s.hp > 0 && s.x > -60);
-    shots = shots.filter((s) => s.x < W + 80 && s.pierce > 0);
+    shots = shots.filter((s) => s.x < W + 80 && s.y > -40 && s.pierce > 0);
     for (const p of sparks) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 560 * dt; p.life -= dt; }
     sparks = sparks.filter((p) => p.life > 0);
     for (const f of floats) { f.y -= 50 * dt; f.life -= dt; }
@@ -698,6 +852,96 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     ctx.restore();
   };
 
+  const drawDragon = (d: Dragon) => {
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    if (d.fall > 0) ctx.rotate(Math.min(1.2, d.fall * 2));
+    const body = d.flash > 0 ? "#ffffff" : "#5b1a3a";
+    const belly = d.flash > 0 ? "#ffffff" : "#c2502f";
+    const wing = Math.sin(d.flap) * 34;
+    // far wing
+    ctx.fillStyle = d.flash > 0 ? "#ffffff" : "#3a1030";
+    ctx.beginPath(); ctx.moveTo(10, -6); ctx.lineTo(48, -40 - wing); ctx.lineTo(70, -10 - wing * 0.4); ctx.closePath(); ctx.fill();
+    // tail
+    ctx.strokeStyle = body; ctx.lineWidth = 10; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(40, 4); ctx.quadraticCurveTo(90, 18 + Math.sin(d.flap * 0.7) * 10, 128, 0); ctx.stroke();
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.moveTo(126, -8); ctx.lineTo(146, 0); ctx.lineTo(126, 8); ctx.fill();
+    // body and belly
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.ellipse(10, 0, 48, 20, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = belly;
+    ctx.beginPath(); ctx.ellipse(6, 8, 36, 9, 0, 0, Math.PI * 2); ctx.fill();
+    // neck and head
+    ctx.strokeStyle = body; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(-28, -4); ctx.quadraticCurveTo(-48, -18, -58, -4); ctx.stroke();
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.ellipse(-66, 2, 18, 11, -0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-60, -8); ctx.lineTo(-50, -26); ctx.lineTo(-54, -6); ctx.fill();
+    ctx.fillStyle = "#ffd27a";
+    ctx.shadowColor = "#ff9a3d"; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(-70, -1, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // near wing
+    ctx.fillStyle = d.flash > 0 ? "#ffffff" : "#7a2448";
+    ctx.beginPath(); ctx.moveTo(-6, -10); ctx.lineTo(26, -64 - wing); ctx.lineTo(60, -54 - wing * 0.8); ctx.lineTo(40, -8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // health bar
+    if (d.hp > 0 && d.hp < d.max) {
+      ctx.fillStyle = "rgba(0,0,0,.55)";
+      ctx.fillRect(d.x - 40, d.y - 62, 80, 6);
+      ctx.fillStyle = "#ff9a3d";
+      ctx.fillRect(d.x - 40, d.y - 62, 80 * Math.max(0, d.hp / d.max), 6);
+    }
+  };
+
+  const drawHazards = () => {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const h of hazards) {
+      if (h.kind === "fire") {
+        const r = 9 + Math.random() * 5;
+        const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, r * 2);
+        g.addColorStop(0, "rgba(255,240,180,0.95)");
+        g.addColorStop(0.35, "rgba(255,150,50,0.8)");
+        g.addColorStop(1, "rgba(255,60,20,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(h.x, h.y, r * 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+    for (const h of hazards) {
+      if (h.kind !== "goo") continue;
+      ctx.fillStyle = "rgba(120,224,129,0.35)";
+      ctx.beginPath(); ctx.arc(h.x - h.vx * 0.02, h.y - h.vy * 0.02, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#7ee081";
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, 8, 6, Math.atan2(h.vy, h.vx), 0, Math.PI * 2); ctx.fill();
+    }
+  };
+
+  /** A rented shield shows as an energy barrier in front of the hero, flaring when it blocks. */
+  const drawShield = () => {
+    const eq = game.current.equip;
+    const guard = eq?.look.style === "guard";
+    if (!guard) return;
+    const strength = 0.25 + shieldFlash * 2;
+    const color = eq!.look.colors[0];
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = Math.min(1, strength);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 20;
+    ctx.beginPath(); ctx.arc(HERO_CHEST.x - 10, HERO_CHEST.y + 6, 74, -1.05, 1.05); ctx.stroke();
+    const g = ctx.createRadialGradient(HERO_CHEST.x + 50, HERO_CHEST.y, 4, HERO_CHEST.x + 50, HERO_CHEST.y, 60);
+    g.addColorStop(0, color + "66");
+    g.addColorStop(1, color + "00");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(HERO_CHEST.x - 10, HERO_CHEST.y + 6, 74, -1.05, 1.05); ctx.lineTo(HERO_CHEST.x - 10, HERO_CHEST.y + 6); ctx.fill();
+    ctx.restore();
+  };
+
   const drawSlime = (s: Slime) => {
     const squish = 1 + Math.sin(s.phase) * 0.12;
     const w = s.size * 1.35 * squish;
@@ -786,9 +1030,12 @@ function startGame(canvas: HTMLCanvasElement, game: GameRef, attackRef: { curren
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * 12 * shake * 3, (Math.random() - 0.5) * 8 * shake * 3);
     drawWorld();
+    dragons.forEach(drawDragon);
     slimes.forEach(drawSlime);
     drawHero();
+    drawShield();
     drawFx();
+    drawHazards();
     for (const p of sparks) {
       ctx.globalAlpha = Math.max(0, p.life * 1.6);
       ctx.fillStyle = p.color;

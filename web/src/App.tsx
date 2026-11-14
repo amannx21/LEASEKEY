@@ -74,7 +74,6 @@ export function App() {
       <footer>
         <span>NEAR testnet · factory <AccountLink id={FACTORY_ID} /></span>
         <span>Every item is its own account. Renter keys can only call <code>use_item</code>.</span>
-        <span>Built at the NEAR Hackathon 2026.</span>
       </footer>
 
       {c.busy && (
