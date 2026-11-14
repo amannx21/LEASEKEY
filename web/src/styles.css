@@ -613,3 +613,15 @@ button.danger { border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); c
 .arena-steps .link { font-size: 13.5px; }
 @media (max-width: 1000px) { .arena-steps ol { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .arena-steps ol { grid-template-columns: 1fr; gap: 8px; } .arena-steps li { padding: 10px 12px; } .arena-intro .lede { font-size: 15.5px; } }
+
+/* iOS (Safari and in-app browsers) repositions bottom-fixed bars late while its toolbar
+   collapses during a scroll, and a translucent blurred bar lags worst. On phones the bar is
+   opaque, unblurred and on its own compositing layer, so it moves with the scroll. */
+@media (max-width: 720px) {
+  nav {
+    background: color-mix(in srgb, var(--deep) 97%, var(--bg-2));
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    transform: translate3d(0, 0, 0); will-change: transform; contain: layout paint;
+  }
+}
+@supports (min-height: 100dvh) { .app { min-height: 100dvh; } }
